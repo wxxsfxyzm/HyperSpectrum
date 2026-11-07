@@ -3,7 +3,7 @@
 
 [versions]
 # Match the sibling miuix composite without editing that checkout.
-agp = "9.4.1"
+agp = "9.5.1"
 libxposed = "102.0.0"
 junit = "4.13.2"
 kotlin = "2.4.10"
