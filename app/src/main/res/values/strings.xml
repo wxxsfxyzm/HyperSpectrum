@@ -23,6 +23,8 @@
     <string name="capture_native">Native (Zygisk Next)</string>
     <string name="native_status_connected">ZN sampling is available</string>
     <string name="native_status_disconnected">ZN sampling is not connected</string>
+    <string name="status_working_zn_connected">Working · ZN connected</string>
+    <string name="status_working_zn_disconnected">Working · ZN disconnected</string>
     <string name="stop_when_muted">Stop at volume 0</string>
     <string name="stop_when_muted_summary">Stop sampling when media volume is zero.</string>
     <string name="enable_spectrum">Audio spectrum</string>

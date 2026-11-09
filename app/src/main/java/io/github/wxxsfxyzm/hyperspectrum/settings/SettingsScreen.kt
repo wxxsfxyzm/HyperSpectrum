@@ -169,7 +169,7 @@ internal fun SettingsScreen(
                                     value = stringResource(if (state.captureBackend == SpectrumPreferences.NATIVE)
                                         R.string.capture_native else R.string.capture_visualizer),
                                     anchor = captureAnchor,
-                                    enabled = optionsEnabled,
+                                    enabled = true,
                                     onClick = { captureMenu = true; colorMenu = false },
                                     onBounds = { captureBounds = it },
                                 )
@@ -242,7 +242,7 @@ internal fun SettingsScreen(
                 }
             }
             GlassDropdownPopup(
-                show = captureMenu && optionsEnabled && BuildConfig.NATIVE_CAPTURE && state.nativeAvailable,
+                show = captureMenu && BuildConfig.NATIVE_CAPTURE,
                 onDismissRequest = { captureMenu = false },
                 anchorBounds = captureBounds,
                 anchor = captureAnchor,
@@ -286,10 +286,14 @@ private fun ModuleStatusCard(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val ready = state.connected && state.systemUiInScope && !state.loading && state.error == null
+    val frameworkReady = state.connected && state.systemUiInScope && !state.loading && state.error == null
+    val ready = frameworkReady && (!BuildConfig.NATIVE_CAPTURE || state.nativeAvailable)
     val warning = state.loading || (state.connected && !state.systemUiInScope && state.error == null)
+            || (frameworkReady && BuildConfig.NATIVE_CAPTURE && !state.nativeAvailable)
     val dark = isSystemInDarkTheme()
-    val title = stringResource(
+    val title = if (frameworkReady && BuildConfig.NATIVE_CAPTURE) {
+        stringResource(if (state.nativeAvailable) R.string.status_working_zn_connected else R.string.status_working_zn_disconnected)
+    } else stringResource(
         when {
             ready -> R.string.status_working
             state.connected -> R.string.status_connected
@@ -302,10 +306,8 @@ private fun ModuleStatusCard(
         state.error == SettingsError.Save -> stringResource(R.string.save_error)
         !state.connected -> stringResource(R.string.activate_hint)
         !state.systemUiInScope -> stringResource(R.string.scope_hint)
-        else -> stringResource(R.string.status_ready)
-    } + if (BuildConfig.NATIVE_CAPTURE) "\n" + stringResource(
-        if (state.nativeAvailable) R.string.native_status_connected else R.string.native_status_disconnected,
-    ) else ""
+        else -> ""
+    }
     val cardColor = when {
         ready && MiuixTheme.isDynamicColor -> MiuixTheme.colorScheme.secondaryContainer
         ready && dark -> Color(0xFF1A3825)
@@ -356,7 +358,7 @@ private fun ModuleStatusCard(
                         contentDescription = null,
                     )
                 }
-                if (ready) {
+                    if (frameworkReady) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -374,8 +376,10 @@ private fun ModuleStatusCard(
                 ) {
                     Column {
                         Text(text = title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(1.dp))
-                        Text(text = summary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        if (summary.isNotBlank()) {
+                            Spacer(Modifier.height(1.dp))
+                            Text(text = summary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }

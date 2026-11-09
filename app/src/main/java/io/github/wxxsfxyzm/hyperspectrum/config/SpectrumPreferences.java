@@ -22,6 +22,7 @@ public final class SpectrumPreferences {
     public static final String NATIVE_AVAILABILITY_ACTION = "io.github.wxxsfxyzm.hyperspectrum.NATIVE_AVAILABILITY";
     public static final String NATIVE_AVAILABILITY_EXTRA = "available";
     public static final String NATIVE_AVAILABILITY_QUERY_ACTION = "io.github.wxxsfxyzm.hyperspectrum.QUERY_NATIVE_AVAILABILITY";
+    public static final String NATIVE_AVAILABILITY_NONCE = "native_availability_nonce";
     public static final String DEFAULT_CAPTURE_BACKEND = VISUALIZER;
 
     public static String colorScheme(String value) {

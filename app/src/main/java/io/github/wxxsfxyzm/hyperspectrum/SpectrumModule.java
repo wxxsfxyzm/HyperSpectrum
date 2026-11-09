@@ -60,16 +60,14 @@ public final class SpectrumModule extends XposedModule {
                 int appUid = context.getPackageManager().getApplicationInfo(
                         "io.github.wxxsfxyzm.hyperspectrum", 0).uid;
                 int sender = getSentFromUid();
-                if (sender != appUid) {
+                String senderPackage = getSentFromPackage();
+                long nonce = intent.getLongExtra(SpectrumPreferences.NATIVE_AVAILABILITY_NONCE, 0L);
+                if (sender != appUid || !"io.github.wxxsfxyzm.hyperspectrum".equals(senderPackage) || nonce == 0L) {
                     report("native_availability_query_rejected sender=" + sender + " expected=" + appUid, null);
                     return;
                 }
                 boolean available = BuildConfig.NATIVE_CAPTURE && ui != null && ui.nativeAvailable();
-                Bundle result = new Bundle();
-                result.putBoolean(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
-                setResultExtras(result);
-                publishNativeAvailability(available);
-                report("native_availability_query answered=" + available, null);
+                sendNativeAvailabilityReply(context, nonce, available);
             } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
         }
     };
@@ -132,6 +130,16 @@ public final class SpectrumModule extends XposedModule {
         context.sendBroadcast(intent);
         lastNativeAvailability = available;
         report("native_backend_signal_sent available=" + available, null);
+    }
+
+    private void sendNativeAvailabilityReply(Context context, long nonce, boolean available) {
+        Intent reply = new Intent(SpectrumPreferences.NATIVE_AVAILABILITY_ACTION)
+                .setPackage("io.github.wxxsfxyzm.hyperspectrum")
+                .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_NONCE, nonce)
+                .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
+        Bundle options = android.app.BroadcastOptions.makeBasic().setShareIdentityEnabled(true).toBundle();
+        context.sendBroadcast(reply, null, options);
+        report("native_availability_query answered=" + available, null);
     }
 
     private void registerAvailabilityQuery(Context context) {

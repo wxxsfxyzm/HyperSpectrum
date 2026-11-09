@@ -59,6 +59,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val optionRevisions = mutableMapOf<String, Long>()
     private var revision = 0L
     private val availabilityPreferences = application.getSharedPreferences(SpectrumPreferences.GROUP, Application.MODE_PRIVATE)
+    private val pendingPreferences = application.getSharedPreferences("pending_settings", Application.MODE_PRIVATE)
+    private val pendingCaptureBackend = "pending_capture_backend"
     private val availabilityListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == SpectrumPreferences.NATIVE_AVAILABLE) {
             state = state.copy(nativeAvailable = availabilityPreferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false))
@@ -108,12 +110,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         revision++
         detachPreferences()
         val current = service
-        state = SettingsState(connected = current != null, loading = current != null)
+        state = SettingsState(
+            connected = current != null,
+            loading = current != null,
+            captureBackend = pendingPreferences.getString(pendingCaptureBackend, null) ?: state.captureBackend,
+            nativeAvailable = availabilityPreferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false),
+        )
         if (current == null) return
         loadJob = viewModelScope.launch {
             try {
                 val loaded = withContext(Dispatchers.IO) {
                     val prefs = current.getRemotePreferences(SpectrumPreferences.GROUP)
+                    val pendingBackend = pendingPreferences.getString(pendingCaptureBackend, null)
+                    val backend = if (pendingBackend != null && prefs.edit()
+                            .putString(SpectrumPreferences.CAPTURE_BACKEND, pendingBackend).commit()) {
+                        pendingPreferences.edit().remove(pendingCaptureBackend).commit()
+                        pendingBackend
+                    } else {
+                        SpectrumPreferences.captureBackend(prefs.getString(SpectrumPreferences.CAPTURE_BACKEND,
+                            SpectrumPreferences.DEFAULT_CAPTURE_BACKEND))
+                    }
                     LoadedSettings(
                         prefs,
                         "${current.frameworkName} ${current.frameworkVersion}",
@@ -121,8 +137,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         prefs.getBoolean(SpectrumPreferences.ENABLED, SpectrumPreferences.DEFAULT_ENABLED),
                         SpectrumPreferences.colorScheme(prefs.getString(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.DEFAULT_COLOR_SCHEME)),
                         prefs.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED),
-                        SpectrumPreferences.captureBackend(prefs.getString(SpectrumPreferences.CAPTURE_BACKEND,
-                            SpectrumPreferences.DEFAULT_CAPTURE_BACKEND)),
+                        backend,
                     )
                 }
                 if (service !== current) return@launch
@@ -183,8 +198,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setColorScheme(value: String) = setOption(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.colorScheme(value))
     fun setStopWhenMuted(value: Boolean) = setOption(SpectrumPreferences.STOP_WHEN_MUTED, value)
-    fun setCaptureBackend(value: String) = setOption(SpectrumPreferences.CAPTURE_BACKEND,
-        SpectrumPreferences.captureBackend(value))
+    fun setCaptureBackend(value: String) {
+        val backend = SpectrumPreferences.captureBackend(value)
+        pendingPreferences.edit().putString(pendingCaptureBackend, backend).apply()
+        state = state.copy(captureBackend = backend, error = null)
+        if (preferences == null) {
+            if (service != null) refresh()
+            return
+        }
+        setOption(SpectrumPreferences.CAPTURE_BACKEND, backend)
+    }
 
     fun nativeAvailability(value: Boolean) {
         state = state.copy(nativeAvailable = value)
@@ -215,7 +238,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
                 if (service !== current || preferences !== prefs) return@withLock
-                if (saved) confirmedOptions[key] = value
+                if (saved) {
+                    confirmedOptions[key] = value
+                    if (key == SpectrumPreferences.CAPTURE_BACKEND)
+                        pendingPreferences.edit().remove(pendingCaptureBackend).apply()
+                }
                 else if (optionRevisions[key] == request) {
                     state = withOption(state, key, fallback).copy(error = SettingsError.Save)
                 }
