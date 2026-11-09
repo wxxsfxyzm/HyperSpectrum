@@ -3,8 +3,10 @@
 
 package io.github.wxxsfxyzm.hyperspectrum.settings
 
-import android.os.Bundle
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.app.Activity
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -51,8 +53,24 @@ class SettingsActivity : ComponentActivity() {
         super.onResume()
         if (::model.isInitialized) {
             model.refresh()
-            sendBroadcast(Intent(io.github.wxxsfxyzm.hyperspectrum.config.SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION)
-                .setPackage("com.android.systemui"))
+            sendOrderedBroadcast(
+                Intent(io.github.wxxsfxyzm.hyperspectrum.config.SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION)
+                    .setPackage("com.android.systemui"),
+                null,
+                object : BroadcastReceiver() {
+                    override fun onReceive(context: android.content.Context, intent: Intent) {
+                        val available = getResultExtras(false)?.getBoolean(
+                            io.github.wxxsfxyzm.hyperspectrum.config.SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA,
+                            false,
+                        ) ?: false
+                        model.nativeAvailability(available)
+                    }
+                },
+                null,
+                Activity.RESULT_OK,
+                null,
+                null,
+            )
         }
     }
 }

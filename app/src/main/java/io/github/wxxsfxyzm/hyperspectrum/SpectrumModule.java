@@ -17,6 +17,7 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.media.session.MediaSession;
+import android.os.Bundle;
 import android.os.Process;
 import android.util.Log;
 
@@ -58,8 +59,17 @@ public final class SpectrumModule extends XposedModule {
             try {
                 int appUid = context.getPackageManager().getApplicationInfo(
                         "io.github.wxxsfxyzm.hyperspectrum", 0).uid;
-                if (getSentFromUid() != appUid) return;
-                publishNativeAvailability(BuildConfig.NATIVE_CAPTURE && ui != null && ui.nativeAvailable());
+                int sender = getSentFromUid();
+                if (sender != appUid) {
+                    report("native_availability_query_rejected sender=" + sender + " expected=" + appUid, null);
+                    return;
+                }
+                boolean available = BuildConfig.NATIVE_CAPTURE && ui != null && ui.nativeAvailable();
+                Bundle result = new Bundle();
+                result.putBoolean(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
+                setResultExtras(result);
+                publishNativeAvailability(available);
+                report("native_availability_query answered=" + available, null);
             } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
         }
     };

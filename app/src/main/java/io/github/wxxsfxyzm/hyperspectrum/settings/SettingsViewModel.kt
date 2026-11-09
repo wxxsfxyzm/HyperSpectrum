@@ -186,6 +186,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setCaptureBackend(value: String) = setOption(SpectrumPreferences.CAPTURE_BACKEND,
         SpectrumPreferences.captureBackend(value))
 
+    fun nativeAvailability(value: Boolean) {
+        state = state.copy(nativeAvailable = value)
+    }
+
     @SuppressLint("ApplySharedPref", "UseKtx")
     private fun setOption(key: String, value: Any) {
         val prefs = preferences ?: return
