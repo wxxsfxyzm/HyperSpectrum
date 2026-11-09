@@ -4,11 +4,13 @@
 package io.github.wxxsfxyzm.hyperspectrum.settings
 
 import android.annotation.SuppressLint
+import android.app.Application
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.libxposed.service.XposedService
 import io.github.wxxsfxyzm.hyperspectrum.config.SpectrumPreferences
@@ -30,7 +32,6 @@ private data class LoadedSettings(
     val colorScheme: String,
     val stopWhenMuted: Boolean,
     val captureBackend: String,
-    val nativeAvailable: Boolean,
 )
 
 data class SettingsState(
@@ -46,7 +47,7 @@ data class SettingsState(
     val error: SettingsError? = null,
 )
 
-class SettingsViewModel : ViewModel() {
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     var state by mutableStateOf(SettingsState())
         private set
     private var service: XposedService? = null
@@ -57,18 +58,33 @@ class SettingsViewModel : ViewModel() {
     private val confirmedOptions = mutableMapOf<String, Any>()
     private val optionRevisions = mutableMapOf<String, Long>()
     private var revision = 0L
+    private val availabilityPreferences = application.getSharedPreferences(SpectrumPreferences.GROUP, Application.MODE_PRIVATE)
+    private val availabilityListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == SpectrumPreferences.NATIVE_AVAILABLE) {
+            state = state.copy(nativeAvailable = availabilityPreferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false))
+        }
+    }
+
+    init {
+        availabilityPreferences.registerOnSharedPreferenceChangeListener(availabilityListener)
+        state = state.copy(nativeAvailable = availabilityPreferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false))
+    }
+
     private val remotePreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
-        if (key == SpectrumPreferences.NATIVE_AVAILABLE || key == SpectrumPreferences.CAPTURE_BACKEND) {
+        if (key == SpectrumPreferences.CAPTURE_BACKEND) {
             viewModelScope.launch {
                 if (preferences === prefs) {
-                    state = state.copy(
-                        nativeAvailable = prefs.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false),
-                        captureBackend = SpectrumPreferences.captureBackend(prefs.getString(
-                            SpectrumPreferences.CAPTURE_BACKEND, SpectrumPreferences.DEFAULT_CAPTURE_BACKEND)),
-                    )
+                    state = state.copy(captureBackend = SpectrumPreferences.captureBackend(prefs.getString(
+                        SpectrumPreferences.CAPTURE_BACKEND, SpectrumPreferences.DEFAULT_CAPTURE_BACKEND)))
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        availabilityPreferences.unregisterOnSharedPreferenceChangeListener(availabilityListener)
+        detachPreferences()
+        super.onCleared()
     }
 
     private fun detachPreferences() {
@@ -107,7 +123,6 @@ class SettingsViewModel : ViewModel() {
                         prefs.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED),
                         SpectrumPreferences.captureBackend(prefs.getString(SpectrumPreferences.CAPTURE_BACKEND,
                             SpectrumPreferences.DEFAULT_CAPTURE_BACKEND)),
-                        prefs.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false),
                     )
                 }
                 if (service !== current) return@launch
@@ -123,7 +138,7 @@ class SettingsViewModel : ViewModel() {
                     colorScheme = loaded.colorScheme,
                     stopWhenMuted = loaded.stopWhenMuted,
                     captureBackend = loaded.captureBackend,
-                    nativeAvailable = loaded.preferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, loaded.nativeAvailable),
+                    nativeAvailable = availabilityPreferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false),
                     framework = loaded.framework,
                     systemUiInScope = loaded.systemUiInScope,
                 )

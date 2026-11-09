@@ -106,6 +106,8 @@ public final class IslandSpectrumUi {
         engine.captureBackend(SpectrumPreferences.NATIVE.equals(value));
     }
 
+    public boolean nativeAvailable() { return engine.nativeAvailable(); }
+
     public void media(Context ctx, String notificationKey, Boolean isPlaying, String route,
                String packageName, int userId, String track, Icon artwork) {
         main(() -> {

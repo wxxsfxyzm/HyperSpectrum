@@ -10,6 +10,7 @@ import io.github.wxxsfxyzm.hyperspectrum.render.IslandSpectrumUi;
 import io.github.wxxsfxyzm.hyperspectrum.render.OriginalArtwork;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
@@ -46,6 +47,8 @@ public final class SpectrumModule extends XposedModule {
     private Object lastController;
     private Object lastMedia;
     private SharedPreferences preferences;
+    private volatile Context systemUiContext;
+    private volatile Boolean lastNativeAvailability;
     private boolean enabled = SpectrumPreferences.DEFAULT_ENABLED;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener = (prefs, key) -> {
         if (key == null || SpectrumPreferences.ENABLED.equals(key)
@@ -78,9 +81,13 @@ public final class SpectrumModule extends XposedModule {
         if (preferences != null && BuildConfig.NATIVE_CAPTURE) {
             Boolean available = message.startsWith("native_backend_available=true") ? Boolean.TRUE
                     : message.startsWith("native_backend_available=false") ? Boolean.FALSE : null;
-            if (available != null && preferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false) != available) {
-                try { preferences.edit().putBoolean(SpectrumPreferences.NATIVE_AVAILABLE, available).commit(); }
-                catch (RuntimeException ignored) { }
+            if (available != null) {
+                try {
+                    publishNativeAvailability(available);
+                } catch (RuntimeException writeFailure) {
+                    Log.w(TAG, "native_backend_broadcast_failed", writeFailure);
+                    log(Log.WARN, TAG, "native_backend_broadcast_failed", writeFailure);
+                }
             }
         }
         String tagged = "build=" + BuildConfig.PROBE_BUILD + " pid=" + Process.myPid() + " " + message;
@@ -89,6 +96,17 @@ public final class SpectrumModule extends XposedModule {
         } else {
             Log.w(TAG, tagged, failure); log(Log.WARN, TAG, tagged, failure);
         }
+    }
+
+    private void publishNativeAvailability(boolean available) {
+        Context context = systemUiContext;
+        if (context == null || available == lastNativeAvailability) return;
+        Intent intent = new Intent(SpectrumPreferences.NATIVE_AVAILABILITY_ACTION)
+                .setPackage("io.github.wxxsfxyzm.hyperspectrum")
+                .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
+        context.sendBroadcast(intent);
+        lastNativeAvailability = available;
+        report("native_backend_signal_sent available=" + available, null);
     }
 
     @Override public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
@@ -102,10 +120,6 @@ public final class SpectrumModule extends XposedModule {
             try {
                 preferences = getRemotePreferences(SpectrumPreferences.GROUP);
                 preferences.registerOnSharedPreferenceChangeListener(preferenceListener);
-                if (BuildConfig.NATIVE_CAPTURE) {
-                    try { preferences.edit().putBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false).commit(); }
-                    catch (RuntimeException ignored) { }
-                }
                 readPreferences();
             } catch (RuntimeException failure) {
                 preferences = null;
@@ -270,6 +284,8 @@ public final class SpectrumModule extends XposedModule {
         if (controller == null || media == null) return;
         ensureProbe();
         Context context = (Context) field(controller, "context");
+        systemUiContext = context.getApplicationContext();
+        if (BuildConfig.NATIVE_CAPTURE && ui != null) publishNativeAvailability(ui.nativeAvailable());
         String key = (String) field(media, "notificationKey");
         Boolean playing = (Boolean) field(media, "isPlaying");
         Object device = field(controller, "castDeviceType");

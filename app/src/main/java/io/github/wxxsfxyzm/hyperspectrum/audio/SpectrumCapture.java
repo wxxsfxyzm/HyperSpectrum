@@ -19,5 +19,6 @@ public interface SpectrumCapture {
     void stopWhenMuted(boolean value);
     void demand(boolean enabled, int count);
     default void captureBackend(boolean nativeBackend) { }
+    default boolean nativeAvailable() { return false; }
     void close();
 }

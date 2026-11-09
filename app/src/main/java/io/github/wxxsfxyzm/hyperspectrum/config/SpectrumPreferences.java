@@ -19,6 +19,8 @@ public final class SpectrumPreferences {
     public static final String VISUALIZER = "visualizer";
     public static final String NATIVE = "native";
     public static final String NATIVE_AVAILABLE = "native_available";
+    public static final String NATIVE_AVAILABILITY_ACTION = "io.github.wxxsfxyzm.hyperspectrum.NATIVE_AVAILABILITY";
+    public static final String NATIVE_AVAILABILITY_EXTRA = "available";
     public static final String DEFAULT_CAPTURE_BACKEND = VISUALIZER;
 
     public static String colorScheme(String value) {

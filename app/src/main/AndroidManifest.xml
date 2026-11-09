@@ -10,5 +10,11 @@
                 <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
             </intent-filter>
         </activity>
+        <receiver android:name=".settings.NativeAvailabilityReceiver" android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="io.github.wxxsfxyzm.hyperspectrum.NATIVE_AVAILABILITY" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

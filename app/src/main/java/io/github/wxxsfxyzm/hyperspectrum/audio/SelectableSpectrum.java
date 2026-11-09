@@ -77,6 +77,7 @@ final class SelectableSpectrum implements SpectrumCapture {
         if (value && !nativeAvailable)
             reporter.report("spectrum_backend_waiting reason=zygisk_next_unavailable fallback=visualizer", null);
     }
+    @Override public boolean nativeAvailable() { return nativeAvailable; }
     @Override public void close() {
         demanded = false;
         available(false);
