@@ -100,7 +100,8 @@ public final class SpectrumModule extends XposedModule {
 
     private void publishNativeAvailability(boolean available) {
         Context context = systemUiContext;
-        if (context == null || available == lastNativeAvailability) return;
+        Boolean previous = lastNativeAvailability;
+        if (context == null || (previous != null && available == previous.booleanValue())) return;
         Intent intent = new Intent(SpectrumPreferences.NATIVE_AVAILABILITY_ACTION)
                 .setPackage("io.github.wxxsfxyzm.hyperspectrum")
                 .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
