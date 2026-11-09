@@ -23,7 +23,7 @@ final class SelectableSpectrum implements SpectrumCapture {
         this.reporter = reporter;
         this.sink = sink;
         visualizer = new LiveSpectrum(reporter, main, (levels, time, healthy) -> {
-            if (!nativeActive()) sink.frame(levels, time, healthy);
+            if (!nativeSelected) sink.frame(levels, time, healthy);
         });
         nativeSpectrum = new NativeSpectrum((message, failure) -> {
             if (message.startsWith("native_results_connected ")) available(true);
@@ -45,11 +45,12 @@ final class SelectableSpectrum implements SpectrumCapture {
         nativeAvailable = value;
         reporter.report("native_backend_available=" + value, null);
         if (initialized) applyDemand();
+        if (nativeSelected && !value) sink.frame(new float[6], SystemClock.uptimeMillis(), false);
     }
 
     private void applyDemand() {
         boolean useNative = nativeActive();
-        visualizer.demand(demanded && !useNative, subscribers);
+        visualizer.demand(demanded && !nativeSelected, subscribers);
         // Keep its authenticated status connection alive while Visualizer is selected.
         nativeSpectrum.demand(demanded && useNative, subscribers);
         reporter.report("spectrum_backend selected=" + (nativeSelected ? "native" : "visualizer")
@@ -57,7 +58,7 @@ final class SelectableSpectrum implements SpectrumCapture {
     }
 
     @Override public void execute(Runnable action) {
-        (nativeActive() ? nativeSpectrum : visualizer).execute(action);
+        (nativeSelected ? nativeSpectrum : visualizer).execute(action);
     }
     @Override public void audio(android.content.Context context) {
         visualizer.audio(context); nativeSpectrum.audio(context);
@@ -74,8 +75,10 @@ final class SelectableSpectrum implements SpectrumCapture {
     @Override public void captureBackend(boolean value) {
         nativeSelected = value;
         applyDemand();
-        if (value && !nativeAvailable)
-            reporter.report("spectrum_backend_waiting reason=zygisk_next_unavailable fallback=visualizer", null);
+        if (value && !nativeAvailable) {
+            sink.frame(new float[6], SystemClock.uptimeMillis(), false);
+            reporter.report("spectrum_backend_waiting reason=zygisk_next_unavailable", null);
+        }
     }
     @Override public boolean nativeAvailable() { return nativeAvailable; }
     @Override public void close() {
