@@ -193,8 +193,11 @@ internal fun SettingsScreen(
                                     checked = state.stopWhenMuted,
                                     onCheckedChange = onStopWhenMutedChange,
                                     title = stringResource(R.string.stop_when_muted),
-                                    summary = stringResource(R.string.stop_when_muted_summary),
-                                    enabled = optionsEnabled,
+                                    summary = stringResource(
+                                        if (state.captureBackend == SpectrumPreferences.VISUALIZER)
+                                            R.string.stop_when_muted_unsupported else R.string.stop_when_muted_summary,
+                                    ),
+                                    enabled = optionsEnabled && state.captureBackend == SpectrumPreferences.NATIVE,
                                 )
                             }
                         }

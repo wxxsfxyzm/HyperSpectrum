@@ -27,6 +27,7 @@
     <string name="status_working_zn_disconnected">Working · ZN disconnected</string>
     <string name="stop_when_muted">Stop at volume 0</string>
     <string name="stop_when_muted_summary">Stop sampling when media volume is zero.</string>
+    <string name="stop_when_muted_unsupported">Unsupported by the Visualizer source.</string>
     <string name="enable_spectrum">Audio spectrum</string>
     <string name="enable_spectrum_summary">Show six colored bars following the music. Turn off to restore the official Lottie animation.</string>
     <string name="about_title">About</string>

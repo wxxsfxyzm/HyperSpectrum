@@ -25,6 +25,7 @@
     <string name="status_working_zn_disconnected">工作中 · ZN 未连接</string>
     <string name="stop_when_muted">音量为 0 时停止波形</string>
     <string name="stop_when_muted_summary">媒体音量为 0 时停止采样。</string>
+    <string name="stop_when_muted_unsupported">当前 Visualizer 采样来源不支持。</string>
     <string name="enable_spectrum">音频频谱</string>
     <string name="enable_spectrum_summary">显示随音乐跳动的六条彩色频谱，关闭后恢复官方 Lottie 动画。</string>
     <string name="about_title">关于</string>
