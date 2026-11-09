@@ -11,6 +11,8 @@ import io.github.wxxsfxyzm.hyperspectrum.render.OriginalArtwork;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
@@ -49,6 +51,18 @@ public final class SpectrumModule extends XposedModule {
     private SharedPreferences preferences;
     private volatile Context systemUiContext;
     private volatile Boolean lastNativeAvailability;
+    private volatile boolean availabilityQueryRegistered;
+    private final BroadcastReceiver availabilityQuery = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (!SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION.equals(intent.getAction())) return;
+            try {
+                int appUid = context.getPackageManager().getApplicationInfo(
+                        "io.github.wxxsfxyzm.hyperspectrum", 0).uid;
+                if (getSentFromUid() != appUid) return;
+                publishNativeAvailability(BuildConfig.NATIVE_CAPTURE && ui != null && ui.nativeAvailable());
+            } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
+        }
+    };
     private boolean enabled = SpectrumPreferences.DEFAULT_ENABLED;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener = (prefs, key) -> {
         if (key == null || SpectrumPreferences.ENABLED.equals(key)
@@ -108,6 +122,23 @@ public final class SpectrumModule extends XposedModule {
         context.sendBroadcast(intent);
         lastNativeAvailability = available;
         report("native_backend_signal_sent available=" + available, null);
+    }
+
+    private void registerAvailabilityQuery(Context context) {
+        if (availabilityQueryRegistered) return;
+        IntentFilter filter = new IntentFilter(SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION);
+        context.registerReceiver(availabilityQuery, filter, Context.RECEIVER_EXPORTED);
+        availabilityQueryRegistered = true;
+    }
+
+    private void unregisterAvailabilityQuery() {
+        Context context = systemUiContext;
+        if (!availabilityQueryRegistered || context == null) return;
+        try { context.unregisterReceiver(availabilityQuery); }
+        catch (IllegalArgumentException ignored) { }
+        availabilityQueryRegistered = false;
+        systemUiContext = null;
+        lastNativeAvailability = null;
     }
 
     @Override public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
@@ -286,6 +317,7 @@ public final class SpectrumModule extends XposedModule {
         ensureProbe();
         Context context = (Context) field(controller, "context");
         systemUiContext = context.getApplicationContext();
+        registerAvailabilityQuery(systemUiContext);
         if (BuildConfig.NATIVE_CAPTURE && ui != null) publishNativeAvailability(ui.nativeAvailable());
         String key = (String) field(media, "notificationKey");
         Boolean playing = (Boolean) field(media, "isPlaying");
@@ -318,6 +350,7 @@ public final class SpectrumModule extends XposedModule {
         IslandSpectrumUi oldUi;
         synchronized (this) {
             retired = true; // In-flight old chain snapshots become passive before resource teardown.
+            unregisterAvailabilityQuery();
             if (preferences != null) {
                 preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener);
                 preferences = null;
