@@ -291,11 +291,9 @@ private fun ModuleStatusCard(
     val warning = state.loading || (state.connected && !state.systemUiInScope && state.error == null)
             || (frameworkReady && BuildConfig.NATIVE_CAPTURE && !state.nativeAvailable)
     val dark = isSystemInDarkTheme()
-    val title = if (frameworkReady && BuildConfig.NATIVE_CAPTURE) {
-        stringResource(if (state.nativeAvailable) R.string.status_working_zn_connected else R.string.status_working_zn_disconnected)
-    } else stringResource(
+    val title = stringResource(
         when {
-            ready -> R.string.status_working
+            frameworkReady -> R.string.status_working
             state.connected -> R.string.status_connected
             else -> R.string.status_disconnected
         },
@@ -306,6 +304,9 @@ private fun ModuleStatusCard(
         state.error == SettingsError.Save -> stringResource(R.string.save_error)
         !state.connected -> stringResource(R.string.activate_hint)
         !state.systemUiInScope -> stringResource(R.string.scope_hint)
+        BuildConfig.NATIVE_CAPTURE -> stringResource(
+            if (state.nativeAvailable) R.string.native_status_connected else R.string.native_status_disconnected,
+        )
         else -> ""
     }
     val cardColor = when {
