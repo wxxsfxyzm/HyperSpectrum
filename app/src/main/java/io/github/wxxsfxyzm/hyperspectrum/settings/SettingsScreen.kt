@@ -178,7 +178,7 @@ internal fun SettingsScreen(
                                 onCheckedChange = onStopWhenMutedChange,
                                 title = stringResource(R.string.stop_when_muted),
                                 summary = stringResource(R.string.stop_when_muted_summary),
-                                enabled = false,
+                                enabled = optionsEnabled,
                             )
                         }
                     }
