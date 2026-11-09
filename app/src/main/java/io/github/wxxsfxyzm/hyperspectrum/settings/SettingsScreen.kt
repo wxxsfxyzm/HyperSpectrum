@@ -163,7 +163,7 @@ internal fun SettingsScreen(
                                 summary = stringResource(R.string.enable_spectrum_summary),
                                 enabled = state.connected && state.systemUiInScope && !state.loading && state.error != SettingsError.Load,
                             )
-                            if (BuildConfig.NATIVE_CAPTURE && state.nativeAvailable) {
+                            if (BuildConfig.NATIVE_CAPTURE) {
                                 GlassDropdownRow(
                                     title = stringResource(R.string.capture_backend),
                                     value = stringResource(if (state.captureBackend == SpectrumPreferences.NATIVE)
@@ -188,13 +188,15 @@ internal fun SettingsScreen(
                                 onClick = { colorMenu = true },
                                 onBounds = { colorBounds = it },
                             )
-                            SwitchPreference(
-                                checked = state.stopWhenMuted,
-                                onCheckedChange = onStopWhenMutedChange,
-                                title = stringResource(R.string.stop_when_muted),
-                                summary = stringResource(R.string.stop_when_muted_summary),
-                                enabled = optionsEnabled,
-                            )
+                            if (BuildConfig.NATIVE_CAPTURE && state.nativeAvailable) {
+                                SwitchPreference(
+                                    checked = state.stopWhenMuted,
+                                    onCheckedChange = onStopWhenMutedChange,
+                                    title = stringResource(R.string.stop_when_muted),
+                                    summary = stringResource(R.string.stop_when_muted_summary),
+                                    enabled = optionsEnabled,
+                                )
+                            }
                         }
                     }
                     item(key = "about-title") {
@@ -301,7 +303,9 @@ private fun ModuleStatusCard(
         !state.connected -> stringResource(R.string.activate_hint)
         !state.systemUiInScope -> stringResource(R.string.scope_hint)
         else -> stringResource(R.string.status_ready)
-    }
+    } + if (BuildConfig.NATIVE_CAPTURE) "\n" + stringResource(
+        if (state.nativeAvailable) R.string.native_status_connected else R.string.native_status_disconnected,
+    ) else ""
     val cardColor = when {
         ready && MiuixTheme.isDynamicColor -> MiuixTheme.colorScheme.secondaryContainer
         ready && dark -> Color(0xFF1A3825)

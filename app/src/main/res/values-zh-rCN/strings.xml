@@ -19,6 +19,8 @@
     <string name="capture_backend">音频采样来源</string>
     <string name="capture_visualizer">Visualizer（默认）</string>
     <string name="capture_native">Native（Zygisk Next）</string>
+    <string name="native_status_connected">ZN 采样后端已连接</string>
+    <string name="native_status_disconnected">ZN 采样后端未连接</string>
     <string name="stop_when_muted">音量为 0 时停止波形</string>
     <string name="stop_when_muted_summary">媒体音量为 0 时停止采样。</string>
     <string name="enable_spectrum">音频频谱</string>
