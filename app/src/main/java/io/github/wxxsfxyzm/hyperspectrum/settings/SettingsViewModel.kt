@@ -57,11 +57,29 @@ class SettingsViewModel : ViewModel() {
     private val confirmedOptions = mutableMapOf<String, Any>()
     private val optionRevisions = mutableMapOf<String, Long>()
     private var revision = 0L
+    private val remotePreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == SpectrumPreferences.NATIVE_AVAILABLE || key == SpectrumPreferences.CAPTURE_BACKEND) {
+            viewModelScope.launch {
+                if (preferences === prefs) {
+                    state = state.copy(
+                        nativeAvailable = prefs.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false),
+                        captureBackend = SpectrumPreferences.captureBackend(prefs.getString(
+                            SpectrumPreferences.CAPTURE_BACKEND, SpectrumPreferences.DEFAULT_CAPTURE_BACKEND)),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun detachPreferences() {
+        preferences?.unregisterOnSharedPreferenceChangeListener(remotePreferenceListener)
+        preferences = null
+    }
 
     fun connect(next: XposedService?) {
         if (service === next && (state.loading || preferences != null)) return
         if (service !== next) {
-            preferences = null
+            detachPreferences()
             state = SettingsState()
         }
         service = next
@@ -72,7 +90,7 @@ class SettingsViewModel : ViewModel() {
         if (writeMutex.isLocked && preferences != null) return
         loadJob?.cancel()
         revision++
-        preferences = null
+        detachPreferences()
         val current = service
         state = SettingsState(connected = current != null, loading = current != null)
         if (current == null) return
@@ -94,6 +112,7 @@ class SettingsViewModel : ViewModel() {
                 }
                 if (service !== current) return@launch
                 preferences = loaded.preferences
+                loaded.preferences.registerOnSharedPreferenceChangeListener(remotePreferenceListener)
                 confirmedEnabled = loaded.enabled
                 confirmedOptions[SpectrumPreferences.COLOR_SCHEME] = loaded.colorScheme
                 confirmedOptions[SpectrumPreferences.STOP_WHEN_MUTED] = loaded.stopWhenMuted
@@ -104,7 +123,7 @@ class SettingsViewModel : ViewModel() {
                     colorScheme = loaded.colorScheme,
                     stopWhenMuted = loaded.stopWhenMuted,
                     captureBackend = loaded.captureBackend,
-                    nativeAvailable = loaded.nativeAvailable,
+                    nativeAvailable = loaded.preferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, loaded.nativeAvailable),
                     framework = loaded.framework,
                     systemUiInScope = loaded.systemUiInScope,
                 )
