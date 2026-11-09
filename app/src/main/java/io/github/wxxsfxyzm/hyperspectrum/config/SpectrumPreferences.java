@@ -15,9 +15,18 @@ public final class SpectrumPreferences {
     public static final String DEFAULT_COLOR_SCHEME = ORIGINAL;
     public static final String STOP_WHEN_MUTED = "stop_when_muted";
     public static final boolean DEFAULT_STOP_WHEN_MUTED = true;
+    public static final String CAPTURE_BACKEND = "capture_backend";
+    public static final String VISUALIZER = "visualizer";
+    public static final String NATIVE = "native";
+    public static final String NATIVE_AVAILABLE = "native_available";
+    public static final String DEFAULT_CAPTURE_BACKEND = VISUALIZER;
 
     public static String colorScheme(String value) {
         return HYPEROS.equals(value) ? HYPEROS : IOS.equals(value) ? IOS : DEFAULT_COLOR_SCHEME;
+    }
+
+    public static String captureBackend(String value) {
+        return NATIVE.equals(value) ? NATIVE : VISUALIZER;
     }
 
     private SpectrumPreferences() { }

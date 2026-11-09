@@ -49,7 +49,8 @@ public final class SpectrumModule extends XposedModule {
     private boolean enabled = SpectrumPreferences.DEFAULT_ENABLED;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener = (prefs, key) -> {
         if (key == null || SpectrumPreferences.ENABLED.equals(key)
-                || SpectrumPreferences.COLOR_SCHEME.equals(key) || SpectrumPreferences.STOP_WHEN_MUTED.equals(key)) readPreferences();
+                || SpectrumPreferences.COLOR_SCHEME.equals(key) || SpectrumPreferences.STOP_WHEN_MUTED.equals(key)
+                || SpectrumPreferences.CAPTURE_BACKEND.equals(key)) readPreferences();
     };
 
     private synchronized void readPreferences() {
@@ -58,18 +59,30 @@ public final class SpectrumModule extends XposedModule {
             enabled = preferences.getBoolean(SpectrumPreferences.ENABLED, SpectrumPreferences.DEFAULT_ENABLED);
             String scheme = SpectrumPreferences.colorScheme(preferences.getString(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.DEFAULT_COLOR_SCHEME));
             boolean stopWhenMuted = preferences.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED);
+            String captureBackend = SpectrumPreferences.captureBackend(preferences.getString(
+                    SpectrumPreferences.CAPTURE_BACKEND, SpectrumPreferences.DEFAULT_CAPTURE_BACKEND));
             if (ui != null) {
                 ui.enabled(enabled);
                 ui.colorScheme(scheme);
                 ui.stopWhenMuted(stopWhenMuted);
+                ui.captureBackend(captureBackend);
             }
-            report("spectrum_setting enabled=" + enabled + " colorScheme=" + scheme + " stopWhenMuted=" + stopWhenMuted, null);
+            report("spectrum_setting enabled=" + enabled + " colorScheme=" + scheme + " stopWhenMuted="
+                    + stopWhenMuted + " captureBackend=" + captureBackend, null);
         } catch (RuntimeException failure) {
             report("spectrum_settings_unavailable", failure);
         }
     }
 
     private void report(String message, Throwable failure) {
+        if (preferences != null && BuildConfig.NATIVE_CAPTURE) {
+            Boolean available = message.startsWith("native_backend_available=true") ? Boolean.TRUE
+                    : message.startsWith("native_backend_available=false") ? Boolean.FALSE : null;
+            if (available != null && preferences.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false) != available) {
+                try { preferences.edit().putBoolean(SpectrumPreferences.NATIVE_AVAILABLE, available).commit(); }
+                catch (RuntimeException ignored) { }
+            }
+        }
         String tagged = "build=" + BuildConfig.PROBE_BUILD + " pid=" + Process.myPid() + " " + message;
         if (failure == null) {
             Log.i(TAG, tagged); log(Log.INFO, TAG, tagged);
@@ -89,6 +102,10 @@ public final class SpectrumModule extends XposedModule {
             try {
                 preferences = getRemotePreferences(SpectrumPreferences.GROUP);
                 preferences.registerOnSharedPreferenceChangeListener(preferenceListener);
+                if (BuildConfig.NATIVE_CAPTURE) {
+                    try { preferences.edit().putBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false).commit(); }
+                    catch (RuntimeException ignored) { }
+                }
                 readPreferences();
             } catch (RuntimeException failure) {
                 preferences = null;

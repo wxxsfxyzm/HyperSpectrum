@@ -22,12 +22,25 @@ import kotlinx.coroutines.withContext
 
 enum class SettingsError { Load, Save }
 
+private data class LoadedSettings(
+    val preferences: SharedPreferences,
+    val framework: String,
+    val systemUiInScope: Boolean,
+    val enabled: Boolean,
+    val colorScheme: String,
+    val stopWhenMuted: Boolean,
+    val captureBackend: String,
+    val nativeAvailable: Boolean,
+)
+
 data class SettingsState(
     val connected: Boolean = false,
     val loading: Boolean = false,
     val enabled: Boolean = SpectrumPreferences.DEFAULT_ENABLED,
     val colorScheme: String = SpectrumPreferences.DEFAULT_COLOR_SCHEME,
     val stopWhenMuted: Boolean = SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED,
+    val captureBackend: String = SpectrumPreferences.DEFAULT_CAPTURE_BACKEND,
+    val nativeAvailable: Boolean = false,
     val framework: String = "",
     val systemUiInScope: Boolean = false,
     val error: SettingsError? = null,
@@ -67,28 +80,33 @@ class SettingsViewModel : ViewModel() {
             try {
                 val loaded = withContext(Dispatchers.IO) {
                     val prefs = current.getRemotePreferences(SpectrumPreferences.GROUP)
-                    Triple(
+                    LoadedSettings(
                         prefs,
                         "${current.frameworkName} ${current.frameworkVersion}",
                         current.scope.contains("com.android.systemui"),
-                    ) to Triple(
                         prefs.getBoolean(SpectrumPreferences.ENABLED, SpectrumPreferences.DEFAULT_ENABLED),
                         SpectrumPreferences.colorScheme(prefs.getString(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.DEFAULT_COLOR_SCHEME)),
                         prefs.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED),
+                        SpectrumPreferences.captureBackend(prefs.getString(SpectrumPreferences.CAPTURE_BACKEND,
+                            SpectrumPreferences.DEFAULT_CAPTURE_BACKEND)),
+                        prefs.getBoolean(SpectrumPreferences.NATIVE_AVAILABLE, false),
                     )
                 }
                 if (service !== current) return@launch
-                preferences = loaded.first.first
-                confirmedEnabled = loaded.second.first
-                confirmedOptions[SpectrumPreferences.COLOR_SCHEME] = loaded.second.second
-                confirmedOptions[SpectrumPreferences.STOP_WHEN_MUTED] = loaded.second.third
+                preferences = loaded.preferences
+                confirmedEnabled = loaded.enabled
+                confirmedOptions[SpectrumPreferences.COLOR_SCHEME] = loaded.colorScheme
+                confirmedOptions[SpectrumPreferences.STOP_WHEN_MUTED] = loaded.stopWhenMuted
+                confirmedOptions[SpectrumPreferences.CAPTURE_BACKEND] = loaded.captureBackend
                 state = SettingsState(
                     connected = true,
-                    enabled = loaded.second.first,
-                    colorScheme = loaded.second.second,
-                    stopWhenMuted = loaded.second.third,
-                    framework = loaded.first.second,
-                    systemUiInScope = loaded.first.third,
+                    enabled = loaded.enabled,
+                    colorScheme = loaded.colorScheme,
+                    stopWhenMuted = loaded.stopWhenMuted,
+                    captureBackend = loaded.captureBackend,
+                    nativeAvailable = loaded.nativeAvailable,
+                    framework = loaded.framework,
+                    systemUiInScope = loaded.systemUiInScope,
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -131,6 +149,8 @@ class SettingsViewModel : ViewModel() {
 
     fun setColorScheme(value: String) = setOption(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.colorScheme(value))
     fun setStopWhenMuted(value: Boolean) = setOption(SpectrumPreferences.STOP_WHEN_MUTED, value)
+    fun setCaptureBackend(value: String) = setOption(SpectrumPreferences.CAPTURE_BACKEND,
+        SpectrumPreferences.captureBackend(value))
 
     @SuppressLint("ApplySharedPref", "UseKtx")
     private fun setOption(key: String, value: Any) {
@@ -167,6 +187,7 @@ class SettingsViewModel : ViewModel() {
 
     private fun withOption(previous: SettingsState, key: String, value: Any): SettingsState = when (key) {
         SpectrumPreferences.COLOR_SCHEME -> previous.copy(colorScheme = value as String)
+        SpectrumPreferences.CAPTURE_BACKEND -> previous.copy(captureBackend = value as String)
         else -> previous.copy(stopWhenMuted = value as Boolean)
     }
 

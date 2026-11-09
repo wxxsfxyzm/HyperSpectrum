@@ -18,8 +18,11 @@
     <string name="color_ios">iOS</string>
     <string name="color_macos">macOS artwork colors</string>
     <string name="color_original">Original</string>
+    <string name="capture_backend">Audio source</string>
+    <string name="capture_visualizer">Visualizer (default)</string>
+    <string name="capture_native">Native (Zygisk Next)</string>
     <string name="stop_when_muted">Stop at volume 0</string>
-    <string name="stop_when_muted_summary">Stop the waveform when media volume is zero. (to be implemented)</string>
+    <string name="stop_when_muted_summary">Stop sampling when media volume is zero.</string>
     <string name="enable_spectrum">Audio spectrum</string>
     <string name="enable_spectrum_summary">Show six colored bars following the music. Turn off to restore the official Lottie animation.</string>
     <string name="about_title">About</string>

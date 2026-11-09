@@ -28,6 +28,7 @@ class SettingsActivity : ComponentActivity() {
                     state = model.state,
                     onEnabledChange = model::setEnabled,
                     onColorSchemeChange = model::setColorScheme,
+                    onCaptureBackendChange = model::setCaptureBackend,
                     onStopWhenMutedChange = model::setStopWhenMuted,
                     onRefresh = model::refresh,
                 )
@@ -43,5 +44,10 @@ class SettingsActivity : ComponentActivity() {
     override fun onStop() {
         (application as ModuleApplication).removeObserver(serviceListener)
         super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::model.isInitialized) model.refresh()
     }
 }

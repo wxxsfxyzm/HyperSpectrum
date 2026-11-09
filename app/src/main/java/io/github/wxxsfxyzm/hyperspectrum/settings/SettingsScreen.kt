@@ -81,6 +81,7 @@ internal fun SettingsScreen(
     state: SettingsState,
     onEnabledChange: (Boolean) -> Unit,
     onColorSchemeChange: (String) -> Unit,
+    onCaptureBackendChange: (String) -> Unit,
     onStopWhenMutedChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -96,6 +97,9 @@ internal fun SettingsScreen(
     var colorMenu by remember { mutableStateOf(false) }
     var colorBounds by remember { mutableStateOf(Rect.Zero) }
     val colorAnchor = rememberGlassPopupAnchor()
+    var captureMenu by remember { mutableStateOf(false) }
+    var captureBounds by remember { mutableStateOf(Rect.Zero) }
+    val captureAnchor = rememberGlassPopupAnchor()
     val optionsEnabled = state.enabled && state.connected && state.systemUiInScope && !state.loading && state.error != SettingsError.Load
 
     Scaffold(
@@ -159,6 +163,17 @@ internal fun SettingsScreen(
                                 summary = stringResource(R.string.enable_spectrum_summary),
                                 enabled = state.connected && state.systemUiInScope && !state.loading && state.error != SettingsError.Load,
                             )
+                            if (BuildConfig.NATIVE_CAPTURE && state.nativeAvailable) {
+                                GlassDropdownRow(
+                                    title = stringResource(R.string.capture_backend),
+                                    value = stringResource(if (state.captureBackend == SpectrumPreferences.NATIVE)
+                                        R.string.capture_native else R.string.capture_visualizer),
+                                    anchor = captureAnchor,
+                                    enabled = optionsEnabled,
+                                    onClick = { captureMenu = true; colorMenu = false },
+                                    onBounds = { captureBounds = it },
+                                )
+                            }
                             GlassDropdownRow(
                                 title = stringResource(R.string.color_scheme),
                                 value = stringResource(
@@ -220,6 +235,28 @@ internal fun SettingsScreen(
                         onClick = {
                             onColorSchemeChange(value)
                             colorMenu = false
+                        },
+                    )
+                }
+            }
+            GlassDropdownPopup(
+                show = captureMenu && optionsEnabled && BuildConfig.NATIVE_CAPTURE && state.nativeAvailable,
+                onDismissRequest = { captureMenu = false },
+                anchorBounds = captureBounds,
+                anchor = captureAnchor,
+                backdrop = backdrop,
+                visuals = GlassPopupDefaults.visuals(),
+            ) {
+                listOf(
+                    SpectrumPreferences.VISUALIZER to R.string.capture_visualizer,
+                    SpectrumPreferences.NATIVE to R.string.capture_native,
+                ).forEach { (value, label) ->
+                    GlassPopupItem(
+                        text = stringResource(label),
+                        selected = state.captureBackend == value,
+                        onClick = {
+                            onCaptureBackendChange(value)
+                            captureMenu = false
                         },
                     )
                 }

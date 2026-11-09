@@ -102,6 +102,10 @@ public final class IslandSpectrumUi {
 
     public void stopWhenMuted(boolean value) { engine.stopWhenMuted(value); }
 
+    public void captureBackend(String value) {
+        engine.captureBackend(SpectrumPreferences.NATIVE.equals(value));
+    }
+
     public void media(Context ctx, String notificationKey, Boolean isPlaying, String route,
                String packageName, int userId, String track, Icon artwork) {
         main(() -> {

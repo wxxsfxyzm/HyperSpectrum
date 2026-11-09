@@ -10,7 +10,7 @@ import android.os.Handler;
 public interface SpectrumCapture {
     static SpectrumCapture create(CaptureProbe.Reporter reporter, Handler main, Sink sink) {
         return BuildConfig.NATIVE_CAPTURE
-                ? new NativeSpectrum(reporter, main, sink) : new LiveSpectrum(reporter, main, sink);
+                ? new SelectableSpectrum(reporter, main, sink) : new LiveSpectrum(reporter, main, sink);
     }
     interface Sink { void frame(float[] levels, long uptime, boolean healthy); }
     void execute(Runnable action);
@@ -18,5 +18,6 @@ public interface SpectrumCapture {
     void media(String packageName, int userId);
     void stopWhenMuted(boolean value);
     void demand(boolean enabled, int count);
+    default void captureBackend(boolean nativeBackend) { }
     void close();
 }

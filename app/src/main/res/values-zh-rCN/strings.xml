@@ -16,8 +16,11 @@
     <string name="color_ios">iOS 取色方案</string>
     <string name="color_macos">macOS 封面色彩</string>
     <string name="color_original">原版取色方案</string>
+    <string name="capture_backend">音频采样来源</string>
+    <string name="capture_visualizer">Visualizer（默认）</string>
+    <string name="capture_native">Native（Zygisk Next）</string>
     <string name="stop_when_muted">音量为 0 时停止波形</string>
-    <string name="stop_when_muted_summary">媒体音量为 0 时停止显示波形。（待实现）</string>
+    <string name="stop_when_muted_summary">媒体音量为 0 时停止采样。</string>
     <string name="enable_spectrum">音频频谱</string>
     <string name="enable_spectrum_summary">显示随音乐跳动的六条彩色频谱，关闭后恢复官方 Lottie 动画。</string>
     <string name="about_title">关于</string>
