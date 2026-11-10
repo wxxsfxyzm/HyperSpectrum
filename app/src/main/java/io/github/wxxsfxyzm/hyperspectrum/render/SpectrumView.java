@@ -8,6 +8,7 @@ import io.github.wxxsfxyzm.hyperspectrum.audio.CaptureProbe;
 import io.github.wxxsfxyzm.hyperspectrum.audio.SpectrumDsp;
 
 import android.content.Context;
+import android.graphics.BlendMode;
 import android.graphics.Canvas;
 import android.graphics.Bitmap;
 import android.graphics.BitmapShader;
@@ -19,6 +20,7 @@ import android.graphics.Path;
 import android.graphics.RenderEffect;
 import android.graphics.RenderNode;
 import android.os.SystemClock;
+import android.view.Choreographer;
 import android.view.View;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -34,6 +36,14 @@ final class SpectrumView extends View {
     private final SpectrumMotion motion = BuildConfig.NATIVE_CAPTURE ? new AppleSpectrumMotion() : new SpectrumMotion();
     private final RenderNode artworkNode = new RenderNode("HyperSpectrumArtwork");
     private final Path barMask = new Path();
+    // Six capsules as left, top, right, bottom, radius. The bars are composited in a
+    // small layer instead of clipping the artwork node: HWUI caches the node's blur
+    // snapshot only while its device clip is stable, and a per-frame clipPath both
+    // rebuilt the blur and rasterized an AA clip atlas on every frame.
+    private final float[] bars = new float[SpectrumDsp.BARS * 5];
+    private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint artworkPaint = new Paint();
+    { artworkPaint.setBlendMode(BlendMode.SRC_IN); }
     private boolean allowed, aggregatedVisible, subscribed, ownsOriginal;
     private boolean disposed, drew, fallback = true, pauseSettled;
     private boolean signalUnavailable, silenced;
@@ -61,6 +71,30 @@ final class SpectrumView extends View {
         setClickable(false); setFocusable(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setWillNotDraw(false);
+    }
+
+    // Measured on device: the stock musicWave Lottie presents ~30 fps and the ARR panel follows
+    // the presented cadence. A view frame-rate vote alone did not change it.
+    static final float FRAME_RATE = 30f;
+    // Vsync-aligned pacing with 2 ms jitter tolerance: every 2nd vsync at 60 Hz, every 4th at 120 Hz.
+    private static final long FRAME_NANOS = (long) (1e9 / FRAME_RATE) - 2_000_000L;
+    private final Choreographer choreographer = Choreographer.getInstance();
+    private final Choreographer.FrameCallback frameTick = this::frameTick;
+    private boolean frameRequested;
+    private long lastFrameNanos;
+
+    /** Animation and audio redraws; motion is time based, so skipped vsyncs only drop in-betweens. */
+    private void drawFrame() {
+        if (frameRequested || disposed) return;
+        frameRequested = true;
+        choreographer.postFrameCallback(frameTick);
+    }
+
+    private void frameTick(long frameTimeNanos) {
+        if (disposed) { frameRequested = false; return; }
+        if (frameTimeNanos - lastFrameNanos < FRAME_NANOS) { choreographer.postFrameCallback(frameTick); return; }
+        frameRequested = false; lastFrameNanos = frameTimeNanos;
+        invalidate();
     }
 
     boolean bindOriginal(View next, boolean animated) throws ReflectiveOperationException {
@@ -163,7 +197,7 @@ final class SpectrumView extends View {
             if (!subscribed || !motion.isPlaying()) return;
             if (lastDraw != 0) motion.advance(Math.max(0, SystemClock.uptimeMillis() - lastDraw));
             lastDraw = 0; signalUnavailable = false;
-            motion.silence(); suppressOriginal(); invalidate();
+            motion.silence(); suppressOriginal(); drawFrame();
         } else {
             // Fresh audio must arrive within the usual window once sampling resumes.
             awaitingSince = SystemClock.uptimeMillis(); lastData = 0; scheduleStale();
@@ -185,7 +219,7 @@ final class SpectrumView extends View {
         fallback = false; signalUnavailable = false; motion.frame(levels); lastData = time;
         if (!recovering && motion.recovering()) reporter.report("spectrum_silence_recovery event=start"
                 + " durationMs=" + SpectrumMotion.RECOVERY_MS + " view=" + System.identityHashCode(this), null);
-        suppressOriginal(); invalidate(); scheduleStale();
+        suppressOriginal(); drawFrame(); scheduleStale();
     }
 
     private void scheduleStale() {
@@ -234,6 +268,7 @@ final class SpectrumView extends View {
 
     void dispose(boolean restore) {
         allowed = false; disposed = true; removeCallbacks(stale);
+        choreographer.removeFrameCallback(frameTick); frameRequested = false;
         paint.setShader(null);
         artworkNode.discardDisplayList();
         if (subscribed) { subscribed = false; lifecycle.active(this, false); }
@@ -319,7 +354,6 @@ final class SpectrumView extends View {
         float minHeight = Math.min(bar, 1.8f * density);
         float maxHeight = BuildConfig.NATIVE_CAPTURE ? width : Math.max(minHeight, getHeight());
         float left = (getWidth() - width) * 0.5f;
-        barMask.reset();
         for (int index = 0; index < motion.heights.length; index++) {
             float level = motion.heights[index];
             if (BuildConfig.NATIVE_CAPTURE) {
@@ -329,7 +363,8 @@ final class SpectrumView extends View {
                 float height = ((AppleSpectrumMotion) motion).barHeight(index, width);
                 float y = (getHeight() - height) / 2;
                 float radius = AppleWaveform.radius(bar);
-                barMask.addRoundRect(left, y, left + bar, y + height, radius, radius, Path.Direction.CW);
+                int at = index * 5;
+                bars[at] = left; bars[at + 1] = y; bars[at + 2] = left + bar; bars[at + 3] = y + height; bars[at + 4] = radius;
                 continue;
             }
             float height = minHeight + (maxHeight - minHeight) * level;
@@ -343,9 +378,12 @@ final class SpectrumView extends View {
             left += bar + gap;
         }
         if (BuildConfig.NATIVE_CAPTURE) {
-            int saved = canvas.save();
-            canvas.clipPath(barMask);
             if (canvas.isHardwareAccelerated()) {
+                int saved = canvas.saveLayer(0, 0, getWidth(), getHeight(), null);
+                for (int at = 0; at < bars.length; at += 5) {
+                    canvas.drawRoundRect(bars[at], bars[at + 1], bars[at + 2], bars[at + 3], bars[at + 4], bars[at + 4], barPaint);
+                }
+                canvas.saveLayer(0, 0, getWidth(), getHeight(), artworkPaint);
                 // HWUI may discard a node's display list while this holder is
                 // hidden. Artwork pixels and palette can still be unchanged:
                 // the palette cache is not a validity check for GPU commands.
@@ -355,8 +393,17 @@ final class SpectrumView extends View {
                             + " view=" + System.identityHashCode(this), null);
                 }
                 canvas.drawRenderNode(artworkNode);
-            } else canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
-            canvas.restoreToCount(saved);
+                canvas.restoreToCount(saved);
+            } else {
+                barMask.reset();
+                for (int at = 0; at < bars.length; at += 5) {
+                    barMask.addRoundRect(bars[at], bars[at + 1], bars[at + 2], bars[at + 3], bars[at + 4], bars[at + 4], Path.Direction.CW);
+                }
+                int saved = canvas.save();
+                canvas.clipPath(barMask);
+                canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
+                canvas.restoreToCount(saved);
+            }
         }
         if (!drew) {
             drew = true; int[] xy = new int[2]; getLocationOnScreen(xy);
@@ -370,6 +417,6 @@ final class SpectrumView extends View {
             pauseSettled = true;
             reporter.report("spectrum_pause_settled view=" + System.identityHashCode(this), null);
         }
-        if (moving || colorMoving) postInvalidateOnAnimation();
+        if (moving || colorMoving) drawFrame();
     }
 }
