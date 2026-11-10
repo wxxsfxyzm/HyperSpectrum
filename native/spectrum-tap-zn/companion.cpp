@@ -100,11 +100,28 @@ void status(const Report& r, bool connected, const UiBridge* ui = nullptr) {
     if (good && result == 0) rename(tmp, "/data/adb/hyperspectrum-tap/status");
     else unlink(tmp);
 }
+// Fields whose change must reach the status file at once (control.py acknowledgement).
+struct StatusKey {
+    uint64_t instance = 0, command_sequence = 0, client_generation = 0;
+    uint32_t pid = 0, health = 0, enabled = 0, uid = 0, session = 0, io = 0;
+    bool ui = false;
+    bool operator==(const StatusKey& o) const {
+        return instance == o.instance && command_sequence == o.command_sequence &&
+               client_generation == o.client_generation && pid == o.pid && health == o.health &&
+               enabled == o.enabled && uid == o.uid && session == o.session && io == o.io && ui == o.ui;
+    }
+};
+StatusKey status_key(const Report& r, const UiBridge& ui) {
+    return {r.instance, r.command_sequence, r.client_generation, r.pid, r.health, r.enabled,
+            r.uid, r.session, r.io, ui.fd() >= 0};
+}
 void* connected_thread(void* arg) {
     const int fd = int(reinterpret_cast<intptr_t>(arg));
     Report report{};
     bool authenticated = false;
     uint64_t last_sequence = 0, last_command = 0, last_report = monotonic_ns(), next_status = 0;
+    uint64_t next_command_check = 0;
+    StatusKey written{};
     UiBridge ui;
     auto stop_ui = [&] {
         ui.disconnect();
@@ -117,11 +134,13 @@ void* connected_thread(void* arg) {
         return true;
     };
     while (true) {
-        pollfd p{fd, POLLIN, 0};
-        const int ready = poll(&p, 1, 50);
+        // Event driven: producer reports and UI requests wake this thread. The
+        // timeout only services the 2 s watchdogs and the debug command file.
+        pollfd p[2]{{fd, POLLIN, 0}, {ui.fd(), POLLIN, 0}};
+        const int ready = poll(p, 2, 1000);
         if (ready < 0 && errno == EINTR) continue;
-        if (ready < 0 || (p.revents & (POLLHUP | POLLERR | POLLNVAL))) break;
-        if (ready > 0 && (p.revents & POLLIN)) {
+        if (ready < 0 || (p[0].revents & (POLLHUP | POLLERR | POLLNVAL))) break;
+        if (p[0].revents & POLLIN) {
             Report next;
             if (!receive(fd, next) || next.magic != kMagic || next.version != kVersion ||
                 next.size != sizeof(Report) || !next.instance || next.report_sequence <= last_sequence ||
@@ -129,26 +148,33 @@ void* connected_thread(void* arg) {
                 (!authenticated && !producer_ok(next.pid))) break;
             authenticated = true; report = next; last_sequence = report.report_sequence;
             last_report = monotonic_ns();
-            if (last_report >= next_status) { status(report, true, &ui); next_status = last_report + 500000000; }
             ui.connect_if_needed(report, last_report);
             if (!ui.publish(report) && !stop_ui()) break;
+            // Rewrite on a material change, otherwise as a slow heartbeat.
+            const auto key = status_key(report, ui);
+            if (!(key == written) || last_report >= next_status) {
+                status(report, true, &ui); written = key;
+                next_status = last_report + (report.enabled ? 2000000000ull : 5000000000ull);
+            }
         }
-        if (monotonic_ns() - last_report > 2000000000) break;
-        if (ui.fd() >= 0) {
-            pollfd client{ui.fd(), POLLIN, 0};
-            const int available = poll(&client, 1, 0);
-            if (available < 0 || (client.revents & (POLLHUP | POLLERR | POLLNVAL)) || ui.expired(monotonic_ns())) {
+        const auto now = monotonic_ns();
+        if (now - last_report > 2000000000) break;
+        if (ui.fd() >= 0 && p[1].fd == ui.fd()) {
+            if ((p[1].revents & (POLLHUP | POLLERR | POLLNVAL)) || ui.expired(now)) {
                 if (!stop_ui()) break;
-            } else if (available > 0 && (client.revents & POLLIN)) {
+            } else if (p[1].revents & POLLIN) {
                 Command request;
                 const auto seq = std::max(last_command, report.command_sequence) + 1;
                 if (!ui.request(report, request, seq)) { if (!stop_ui()) break; }
                 else { last_command = seq; if (!send_value(fd, request)) break; }
             }
+        } else if (ui.expired(now)) {
+            if (!stop_ui()) break;
         }
-        if (authenticated && directory_ok()) {
+        if (authenticated && now >= next_command_check) {
+            next_command_check = now + 1000000000;
             Command command;
-            if (read_command(command) && valid(command, report.instance, last_command, monotonic_ns()) &&
+            if (directory_ok() && read_command(command) && valid(command, report.instance, last_command, monotonic_ns()) &&
                 (ui.fd() < 0 || command.seconds == 0)) {
                 last_command = command.sequence;
                 if (!send_value(fd, command)) break;

@@ -89,11 +89,17 @@ def main():
         raise RuntimeError('producer does not match this exact built source')
     if not current.get('connected') or current.get('health') != 4:
         raise RuntimeError('matching producer is not ready')
-    time.sleep(0.65)
-    fresh = status(args.serial)
-    if (fresh.get('instance') != current.get('instance') or
-            fresh.get('sequence', 0) <= current.get('sequence', 0) or not fresh.get('connected')):
-        raise RuntimeError('stale status or producer lifecycle change')
+    # The companion rewrites status on material changes and otherwise every 5 s idle.
+    until = time.monotonic() + 6
+    while True:
+        time.sleep(0.25)
+        fresh = status(args.serial)
+        if fresh.get('instance') != current.get('instance') or not fresh.get('connected'):
+            raise RuntimeError('producer lifecycle change')
+        if fresh.get('sequence', 0) > current.get('sequence', 0):
+            break
+        if time.monotonic() >= until:
+            raise RuntimeError('stale status')
     instance = int(fresh['instance'], 16)
     sequence = max(time.monotonic_ns(), fresh['command_sequence'] + 1)
     payload = encode(instance, sequence, args.uid, args.session, args.io, args.seconds,

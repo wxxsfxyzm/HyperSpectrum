@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <new>
 #include <atomic>
+#include <algorithm>
 
 namespace {
 using namespace tap;
@@ -155,7 +156,7 @@ void* worker(void*) {
     report.pid = uint32_t(getpid()); report.instance = instance;
     std::memcpy(report.source_build, TAP_SOURCE_BUILD, sizeof(report.source_build));
     report.health = uint32_t(health);
-    uint64_t next_report = 0, last_command = 0;
+    uint64_t next_report = 0, last_command = 0, sent_spectrum = 0;
     bool signal_pending = false;
     for (;;) {
         int fd = zn.connectCompanion(module_handle);
@@ -166,8 +167,11 @@ void* worker(void*) {
             // A short lease also fails closed if the worker/companion stalls.
             const auto expiry = engine ? engine->deadline.load(std::memory_order_acquire) : 0;
             if (expiry && now >= expiry) engine->stop();
-            if (engine && engine->deadline.load()) engine->drain(report);
-            else if (engine && signal_pending && engine->clear_signal(&report)) {
+            if (engine && engine->deadline.load()) {
+                engine->drain(report);
+                // Forward each new FFT frame at once; between frames only a heartbeat.
+                if (report.spectrum.sequence != sent_spectrum) next_report = 0;
+            } else if (engine && signal_pending && engine->clear_signal(&report)) {
                 signal_pending = false; report.spectrum = SpectrumFrame{};
             }
             if (now >= next_report) {
@@ -176,11 +180,16 @@ void* worker(void*) {
                 if (engine) engine->counters(report);
                 report.enabled = now < report.deadline_ns;
                 connected = send_value(fd, report);
-                next_report = now + (report.enabled ? 25000000 : 500000000);
+                sent_spectrum = report.spectrum.sequence;
+                next_report = now + (report.enabled ? 250000000 : 500000000);
             }
             if (!connected) break;
             pollfd p{fd, POLLIN, 0};
-            const int ready = poll(&p, 1, expiry && now < expiry ? 2 : 200);
+            // A lease drains the 4-block rings every 10 ms (blocks seen on device are
+            // >= ~9.7 ms each); idle sleeps until the next heartbeat or a command.
+            const int64_t until_report = (int64_t(next_report) - int64_t(monotonic_ns())) / 1000000;
+            const int timeout = expiry && now < expiry ? 10 : int(std::clamp<int64_t>(until_report, 1, 500));
+            const int ready = poll(&p, 1, timeout);
             if (ready < 0 && errno == EINTR) continue;
             if (ready < 0 || (p.revents & (POLLHUP | POLLERR | POLLNVAL))) break;
             if (ready > 0 && (p.revents & POLLIN)) {
