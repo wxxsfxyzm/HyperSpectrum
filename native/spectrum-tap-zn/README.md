@@ -24,7 +24,9 @@ The module ZIP and build manifest are written to `out/native-tap/`. Build the
 APK with `-PnativeCapture=true -PnativeTapBuild=SOURCE_HASH`, using the
 `source_sha256` from that manifest, or use the device script's `--native` option.
 Ordinary APK builds keep the existing Visualizer backend. A native build
-uses resting capsules on unavailable data; it does not silently select Visualizer.
+prefers this backend and falls back to Visualizer while the companion is
+disconnected or no usable frame arrives for 1.5 s; the first healthy frame
+switches back. The settings status card shows the current mode.
 Install the ZIP through KernelSU only for an explicit device trial.
 A fresh audioserver process is required; these scripts never restart it.
 No SELinux rules are bundled.

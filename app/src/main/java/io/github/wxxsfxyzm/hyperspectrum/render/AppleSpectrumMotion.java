@@ -8,6 +8,8 @@ final class AppleSpectrumMotion extends SpectrumMotion {
     private final float[] heightFrom = new float[6], heightTo = new float[6], heightPresentation = new float[6];
     private float floor;
     private boolean playing = true;
+    // Stop-at-volume-0 settles with the pause curve but keeps the playing state.
+    private boolean settling;
     private float elapsed = AppleWaveform.SAMPLE_MS;
     @Override boolean isPlaying() { return playing; }
     @Override boolean recovering() { return false; }
@@ -29,7 +31,7 @@ final class AppleSpectrumMotion extends SpectrumMotion {
     }
     @Override boolean playing(boolean value) {
         if (playing == value) return false;
-        playing = value;
+        playing = value; settling = false;
         System.arraycopy(heights, 0, from, 0, 6);
         System.arraycopy(heightPresentation, 0, heightFrom, 0, 6);
         if (value) {
@@ -46,6 +48,7 @@ final class AppleSpectrumMotion extends SpectrumMotion {
     }
     @Override void frame(float[] levels) {
         if (!playing) return;
+        settling = false;
         System.arraycopy(heights, 0, from, 0, 6);
         System.arraycopy(heightPresentation, 0, heightFrom, 0, 6);
         for (int i = 0; i < 6; i++) {
@@ -54,10 +57,18 @@ final class AppleSpectrumMotion extends SpectrumMotion {
         }
         elapsed = 0;
     }
+    @Override void silence() {
+        if (!playing) return;
+        System.arraycopy(heights, 0, from, 0, 6);
+        System.arraycopy(heightPresentation, 0, heightFrom, 0, 6);
+        java.util.Arrays.fill(to, 0); java.util.Arrays.fill(heightTo, floor);
+        elapsed = 0; settling = true;
+    }
+    private float duration() { return playing && !settling ? AppleWaveform.SAMPLE_MS : AppleWaveform.PAUSE_MS; }
     @Override boolean advance(float ms) {
-        float duration = playing ? AppleWaveform.SAMPLE_MS : AppleWaveform.PAUSE_MS;
+        float duration = duration();
         elapsed = Math.min(duration, elapsed + Math.max(0, ms));
-        float progress = AppleWaveform.ease(elapsed / duration, !playing);
+        float progress = AppleWaveform.ease(elapsed / duration, duration == AppleWaveform.PAUSE_MS);
         for (int i = 0; i < 6; i++) {
             heights[i] = from[i] + (to[i] - from[i]) * progress;
             heightPresentation[i] = heightFrom[i] + (heightTo[i] - heightFrom[i]) * progress;
@@ -65,7 +76,7 @@ final class AppleSpectrumMotion extends SpectrumMotion {
         return elapsed < duration;
     }
     @Override void hidden() {
-        elapsed = playing ? AppleWaveform.SAMPLE_MS : AppleWaveform.PAUSE_MS;
+        elapsed = duration();
         if (playing) {
             // Keep the last presentation across an app/Home transition, but
             // discard the old target so it cannot advance off screen or replay.

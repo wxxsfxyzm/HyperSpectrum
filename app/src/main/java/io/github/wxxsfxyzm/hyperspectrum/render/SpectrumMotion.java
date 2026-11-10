@@ -74,6 +74,9 @@ class SpectrumMotion {
         return moving;
     }
 
+    /** Stop-at-volume-0: settle to rest while still playing. */
+    void silence() { frame(new float[heights.length]); }
+
     void hidden() {
         // A hidden pause needs no off-screen animation. Playing state survives a holder handoff.
         if (!playing) { pauseElapsed = PAUSE_MS; java.util.Arrays.fill(heights, 0); }

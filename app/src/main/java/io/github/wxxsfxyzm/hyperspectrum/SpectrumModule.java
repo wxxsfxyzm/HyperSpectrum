@@ -45,37 +45,36 @@ public final class SpectrumModule extends XposedModule {
     private final Map<Executable, HookHandle> handles = new LinkedHashMap<>();
     private final Set<ClassLoader> loaders = Collections.newSetFromMap(new IdentityHashMap<>());
     private CaptureProbe probe;
-    private IslandSpectrumUi ui;
+    private volatile IslandSpectrumUi ui;
     private volatile boolean retired;
     private Object lastController;
     private Object lastMedia;
     private SharedPreferences preferences;
     private volatile Context systemUiContext;
-    private volatile Boolean lastNativeAvailability;
-    private volatile boolean availabilityQueryRegistered;
-    private final BroadcastReceiver availabilityQuery = new BroadcastReceiver() {
+    private volatile String lastMode;
+    private volatile boolean statusQueryRegistered;
+    private final BroadcastReceiver statusQuery = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            if (!SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION.equals(intent.getAction())) return;
+            if (!SpectrumPreferences.STATUS_QUERY_ACTION.equals(intent.getAction())) return;
             try {
                 int appUid = context.getPackageManager().getApplicationInfo(
                         "io.github.wxxsfxyzm.hyperspectrum", 0).uid;
                 int sender = getSentFromUid();
                 String senderPackage = getSentFromPackage();
-                long nonce = intent.getLongExtra(SpectrumPreferences.NATIVE_AVAILABILITY_NONCE, 0L);
+                long nonce = intent.getLongExtra(SpectrumPreferences.STATUS_NONCE, 0L);
                 if (sender != appUid || !"io.github.wxxsfxyzm.hyperspectrum".equals(senderPackage) || nonce == 0L) {
-                    report("native_availability_query_rejected sender=" + sender + " expected=" + appUid, null);
+                    report("capture_mode_query_rejected sender=" + sender + " expected=" + appUid, null);
                     return;
                 }
-                boolean available = BuildConfig.NATIVE_CAPTURE && ui != null && ui.nativeAvailable();
-                sendNativeAvailabilityReply(context, nonce, available);
+                sendModeReply(context, nonce, currentMode());
             } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
         }
     };
     private boolean enabled = SpectrumPreferences.DEFAULT_ENABLED;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener = (prefs, key) -> {
         if (key == null || SpectrumPreferences.ENABLED.equals(key)
-                || SpectrumPreferences.COLOR_SCHEME.equals(key) || SpectrumPreferences.STOP_WHEN_MUTED.equals(key)
-                || SpectrumPreferences.CAPTURE_BACKEND.equals(key)) readPreferences();
+                || SpectrumPreferences.COLOR_SCHEME.equals(key) || SpectrumPreferences.STOP_WHEN_MUTED.equals(key))
+            readPreferences();
     };
 
     private synchronized void readPreferences() {
@@ -84,32 +83,26 @@ public final class SpectrumModule extends XposedModule {
             enabled = preferences.getBoolean(SpectrumPreferences.ENABLED, SpectrumPreferences.DEFAULT_ENABLED);
             String scheme = SpectrumPreferences.colorScheme(preferences.getString(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.DEFAULT_COLOR_SCHEME));
             boolean stopWhenMuted = preferences.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED);
-            String captureBackend = SpectrumPreferences.captureBackend(preferences.getString(
-                    SpectrumPreferences.CAPTURE_BACKEND, SpectrumPreferences.DEFAULT_CAPTURE_BACKEND));
             if (ui != null) {
                 ui.enabled(enabled);
                 ui.colorScheme(scheme);
                 ui.stopWhenMuted(stopWhenMuted);
-                ui.captureBackend(captureBackend);
             }
             report("spectrum_setting enabled=" + enabled + " colorScheme=" + scheme + " stopWhenMuted="
-                    + stopWhenMuted + " captureBackend=" + captureBackend, null);
+                    + stopWhenMuted, null);
         } catch (RuntimeException failure) {
             report("spectrum_settings_unavailable", failure);
         }
     }
 
     private void report(String message, Throwable failure) {
-        if (preferences != null && BuildConfig.NATIVE_CAPTURE) {
-            Boolean available = message.startsWith("native_backend_available=true") ? Boolean.TRUE
-                    : message.startsWith("native_backend_available=false") ? Boolean.FALSE : null;
-            if (available != null) {
-                try {
-                    publishNativeAvailability(available);
-                } catch (RuntimeException writeFailure) {
-                    Log.w(TAG, "native_backend_broadcast_failed", writeFailure);
-                    log(Log.WARN, TAG, "native_backend_broadcast_failed", writeFailure);
-                }
+        if (BuildConfig.NATIVE_CAPTURE && message.startsWith("spectrum_mode=")) {
+            String mode = SpectrumPreferences.captureMode(message.substring(14).split(" ", 2)[0]);
+            try {
+                if (mode != null) publishMode(mode);
+            } catch (RuntimeException writeFailure) {
+                Log.w(TAG, "capture_mode_broadcast_failed", writeFailure);
+                log(Log.WARN, TAG, "capture_mode_broadcast_failed", writeFailure);
             }
         }
         String tagged = "build=" + BuildConfig.PROBE_BUILD + " pid=" + Process.myPid() + " " + message;
@@ -120,43 +113,47 @@ public final class SpectrumModule extends XposedModule {
         }
     }
 
-    private void publishNativeAvailability(boolean available) {
-        Context context = systemUiContext;
-        Boolean previous = lastNativeAvailability;
-        if (context == null || (previous != null && available == previous.booleanValue())) return;
-        Intent intent = new Intent(SpectrumPreferences.NATIVE_AVAILABILITY_ACTION)
-                .setPackage("io.github.wxxsfxyzm.hyperspectrum")
-                .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
-        context.sendBroadcast(intent);
-        lastNativeAvailability = available;
-        report("native_backend_signal_sent available=" + available, null);
+    private String currentMode() {
+        IslandSpectrumUi current = ui;
+        return current == null ? SpectrumPreferences.MODE_VISUALIZER : current.captureMode();
     }
 
-    private void sendNativeAvailabilityReply(Context context, long nonce, boolean available) {
-        Intent reply = new Intent(SpectrumPreferences.NATIVE_AVAILABILITY_ACTION)
+    private void publishMode(String mode) {
+        Context context = systemUiContext;
+        if (context == null || mode.equals(lastMode)) return;
+        Intent intent = new Intent(SpectrumPreferences.STATUS_ACTION)
                 .setPackage("io.github.wxxsfxyzm.hyperspectrum")
-                .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_NONCE, nonce)
-                .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, available);
+                .putExtra(SpectrumPreferences.CAPTURE_MODE, mode);
+        context.sendBroadcast(intent);
+        lastMode = mode;
+        report("capture_mode_signal_sent mode=" + mode, null);
+    }
+
+    private void sendModeReply(Context context, long nonce, String mode) {
+        Intent reply = new Intent(SpectrumPreferences.STATUS_ACTION)
+                .setPackage("io.github.wxxsfxyzm.hyperspectrum")
+                .putExtra(SpectrumPreferences.STATUS_NONCE, nonce)
+                .putExtra(SpectrumPreferences.CAPTURE_MODE, mode);
         Bundle options = android.app.BroadcastOptions.makeBasic().setShareIdentityEnabled(true).toBundle();
         context.sendBroadcast(reply, null, options);
-        report("native_availability_query answered=" + available, null);
+        report("capture_mode_query answered=" + mode, null);
     }
 
-    private void registerAvailabilityQuery(Context context) {
-        if (availabilityQueryRegistered) return;
-        IntentFilter filter = new IntentFilter(SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION);
-        context.registerReceiver(availabilityQuery, filter, Context.RECEIVER_EXPORTED);
-        availabilityQueryRegistered = true;
+    private void registerStatusQuery(Context context) {
+        if (statusQueryRegistered) return;
+        IntentFilter filter = new IntentFilter(SpectrumPreferences.STATUS_QUERY_ACTION);
+        context.registerReceiver(statusQuery, filter, Context.RECEIVER_EXPORTED);
+        statusQueryRegistered = true;
     }
 
-    private void unregisterAvailabilityQuery() {
+    private void unregisterStatusQuery() {
         Context context = systemUiContext;
-        if (!availabilityQueryRegistered || context == null) return;
-        try { context.unregisterReceiver(availabilityQuery); }
+        if (!statusQueryRegistered || context == null) return;
+        try { context.unregisterReceiver(statusQuery); }
         catch (IllegalArgumentException ignored) { }
-        availabilityQueryRegistered = false;
+        statusQueryRegistered = false;
         systemUiContext = null;
-        lastNativeAvailability = null;
+        lastMode = null;
     }
 
     @Override public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
@@ -335,8 +332,8 @@ public final class SpectrumModule extends XposedModule {
         ensureProbe();
         Context context = (Context) field(controller, "context");
         systemUiContext = context.getApplicationContext();
-        registerAvailabilityQuery(systemUiContext);
-        if (BuildConfig.NATIVE_CAPTURE && ui != null) publishNativeAvailability(ui.nativeAvailable());
+        registerStatusQuery(systemUiContext);
+        if (BuildConfig.NATIVE_CAPTURE && ui != null) publishMode(ui.captureMode());
         String key = (String) field(media, "notificationKey");
         Boolean playing = (Boolean) field(media, "isPlaying");
         Object device = field(controller, "castDeviceType");
@@ -368,7 +365,7 @@ public final class SpectrumModule extends XposedModule {
         IslandSpectrumUi oldUi;
         synchronized (this) {
             retired = true; // In-flight old chain snapshots become passive before resource teardown.
-            unregisterAvailabilityQuery();
+            unregisterStatusQuery();
             if (preferences != null) {
                 preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener);
                 preferences = null;

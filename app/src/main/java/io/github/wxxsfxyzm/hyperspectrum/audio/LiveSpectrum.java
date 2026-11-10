@@ -44,6 +44,7 @@ final class LiveSpectrum implements SpectrumCapture {
     private int volume, maxVolume;
     private boolean muted;
     private boolean stopWhenMuted = SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED;
+    private boolean silencedSent;
     private long lastVolumeError, captureAfter, retryAfter;
     private final Visualizer.MeasurementPeakRms measurement = new Visualizer.MeasurementPeakRms();
     private boolean measurementReady;
@@ -229,7 +230,16 @@ final class LiveSpectrum implements SpectrumCapture {
                             latest[0] = bass.level(dsp.bandAmplitudes()[0], now);
                             // Keep capturing real PCM so unmute can use the existing smooth onset.
                             // Turning this option off never manufactures signal from silent PCM.
-                            if (stopWhenMuted && muted) Arrays.fill(latest, 0);
+                            boolean silent = stopWhenMuted && muted;
+                            if (silent) Arrays.fill(latest, 0);
+                            if (silent != silencedSent) {
+                                silencedSent = silent;
+                                // Posted before this frame's delivery, so views settle first.
+                                main.post(() -> {
+                                    synchronized (LiveSpectrum.this) { if (closed) return; }
+                                    sink.silenced(silent);
+                                });
+                            }
                             fftMaxUs = Math.max(fftMaxUs, (SystemClock.elapsedRealtimeNanos() - computeStart) / 1000);
                         }
                         catch (RuntimeException failure) {

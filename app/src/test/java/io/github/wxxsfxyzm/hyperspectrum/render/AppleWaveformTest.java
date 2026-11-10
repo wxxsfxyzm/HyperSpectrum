@@ -125,4 +125,21 @@ public class AppleWaveformTest {
         m.advance(40); m.playing(false); m.advance(900);
         assertEquals(5, m.barHeight(0, 32), 0);
     }
+    @Test public void stopAtVolumeZeroSettlesWithPauseCurveWhileStillPlaying() {
+        AppleSpectrumMotion m = new AppleSpectrumMotion(); m.geometry(48, 32);
+        m.frame(new float[]{1, 1, 1, 1, 1, 1}); m.advance(80);
+        assertEquals(32, m.barHeight(0, 32), 0.00001);
+        m.silence();
+        // Not the 80 ms sample snap: halfway through the 900 ms pause curve.
+        assertTrue(m.advance(80));
+        assertTrue(m.barHeight(0, 32) > 5);
+        m.advance(370);
+        assertEquals(32 + (5 - 32) * AppleWaveform.ease(0.5f, true), m.barHeight(0, 32), 0.00001);
+        assertFalse(m.advance(900));
+        assertEquals(5, m.barHeight(0, 32), 0);
+        assertTrue(m.isPlaying());
+        // Fresh audio after unmute uses the ordinary sample animation again.
+        m.frame(new float[]{1, 0, 0, 0, 0, 0}); m.advance(40);
+        assertEquals(5 + 27 * AppleWaveform.ease(0.5f, false), m.barHeight(0, 32), 0.00001);
+    }
 }

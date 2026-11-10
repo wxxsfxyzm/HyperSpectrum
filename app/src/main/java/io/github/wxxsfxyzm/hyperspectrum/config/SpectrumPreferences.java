@@ -15,22 +15,22 @@ public final class SpectrumPreferences {
     public static final String DEFAULT_COLOR_SCHEME = ORIGINAL;
     public static final String STOP_WHEN_MUTED = "stop_when_muted";
     public static final boolean DEFAULT_STOP_WHEN_MUTED = true;
-    public static final String CAPTURE_BACKEND = "capture_backend";
-    public static final String VISUALIZER = "visualizer";
-    public static final String NATIVE = "native";
-    public static final String NATIVE_AVAILABLE = "native_available";
-    public static final String NATIVE_AVAILABILITY_ACTION = "io.github.wxxsfxyzm.hyperspectrum.NATIVE_AVAILABILITY";
-    public static final String NATIVE_AVAILABILITY_EXTRA = "available";
-    public static final String NATIVE_AVAILABILITY_QUERY_ACTION = "io.github.wxxsfxyzm.hyperspectrum.QUERY_NATIVE_AVAILABILITY";
-    public static final String NATIVE_AVAILABILITY_NONCE = "native_availability_nonce";
-    public static final String DEFAULT_CAPTURE_BACKEND = VISUALIZER;
+    // ZN is preferred; Visualizer only runs as a fallback. Pref key and extra share this name.
+    public static final String CAPTURE_MODE = "capture_mode";
+    public static final String MODE_NATIVE = "native";
+    public static final String MODE_VISUALIZER = "visualizer";
+    // Action strings are unchanged from the earlier availability protocol.
+    public static final String STATUS_ACTION = "io.github.wxxsfxyzm.hyperspectrum.NATIVE_AVAILABILITY";
+    public static final String STATUS_QUERY_ACTION = "io.github.wxxsfxyzm.hyperspectrum.QUERY_NATIVE_AVAILABILITY";
+    public static final String STATUS_NONCE = "native_availability_nonce";
 
     public static String colorScheme(String value) {
         return HYPEROS.equals(value) ? HYPEROS : IOS.equals(value) ? IOS : DEFAULT_COLOR_SCHEME;
     }
 
-    public static String captureBackend(String value) {
-        return NATIVE.equals(value) ? NATIVE : VISUALIZER;
+    /** Returns null for a missing or unknown mode. */
+    public static String captureMode(String value) {
+        return MODE_NATIVE.equals(value) ? MODE_NATIVE : MODE_VISUALIZER.equals(value) ? MODE_VISUALIZER : null;
     }
 
     private SpectrumPreferences() { }

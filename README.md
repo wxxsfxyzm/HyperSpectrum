@@ -70,8 +70,9 @@ An optional Zygisk Next backend is available on rooted arm64 devices with
 Zygisk Next 1.5.2. Install its ZIP through the root manager and enable the
 module. The installer has no ROM-version allowlist; it checks the installation
 mode, architecture, and Zygisk Next presence. AudioFlinger compatibility is
-checked at runtime. If the native backend is unavailable, Visualizer remains
-available and selected by default. See the native
+checked at runtime. Native builds use Zygisk Next first and fall back to
+Visualizer while it is unavailable or delivers no audio; the status card shows
+the current mode. See the native
 [build and installation instructions](native/spectrum-tap-zn/README.md).
 
 ## License

@@ -7,14 +7,13 @@ import android.content.Context
 import android.content.Intent
 import io.github.wxxsfxyzm.hyperspectrum.config.SpectrumPreferences
 
-/** Receives availability only from senders holding the platform DUMP permission. */
-class NativeAvailabilityReceiver : BroadcastReceiver() {
+/** Receives the working capture mode only from senders holding the platform DUMP permission. */
+class CaptureModeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != SpectrumPreferences.NATIVE_AVAILABILITY_ACTION ||
-            !intent.hasExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA)) return
+        if (intent.action != SpectrumPreferences.STATUS_ACTION) return
+        val mode = SpectrumPreferences.captureMode(intent.getStringExtra(SpectrumPreferences.CAPTURE_MODE)) ?: return
         context.getSharedPreferences(SpectrumPreferences.GROUP, Context.MODE_PRIVATE).edit()
-            .putBoolean(SpectrumPreferences.NATIVE_AVAILABLE,
-                intent.getBooleanExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, false))
+            .putString(SpectrumPreferences.CAPTURE_MODE, mode)
             .apply()
     }
 }

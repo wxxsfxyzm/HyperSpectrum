@@ -81,7 +81,6 @@ internal fun SettingsScreen(
     state: SettingsState,
     onEnabledChange: (Boolean) -> Unit,
     onColorSchemeChange: (String) -> Unit,
-    onCaptureBackendChange: (String) -> Unit,
     onStopWhenMutedChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -97,9 +96,6 @@ internal fun SettingsScreen(
     var colorMenu by remember { mutableStateOf(false) }
     var colorBounds by remember { mutableStateOf(Rect.Zero) }
     val colorAnchor = rememberGlassPopupAnchor()
-    var captureMenu by remember { mutableStateOf(false) }
-    var captureBounds by remember { mutableStateOf(Rect.Zero) }
-    val captureAnchor = rememberGlassPopupAnchor()
     val optionsEnabled = state.enabled && state.connected && state.systemUiInScope && !state.loading && state.error != SettingsError.Load
 
     Scaffold(
@@ -163,17 +159,6 @@ internal fun SettingsScreen(
                                 summary = stringResource(R.string.enable_spectrum_summary),
                                 enabled = state.connected && state.systemUiInScope && !state.loading && state.error != SettingsError.Load,
                             )
-                            if (BuildConfig.NATIVE_CAPTURE) {
-                                GlassDropdownRow(
-                                    title = stringResource(R.string.capture_backend),
-                                    value = stringResource(if (state.captureBackend == SpectrumPreferences.NATIVE)
-                                        R.string.capture_native else R.string.capture_visualizer),
-                                    anchor = captureAnchor,
-                                    enabled = true,
-                                    onClick = { captureMenu = true; colorMenu = false },
-                                    onBounds = { captureBounds = it },
-                                )
-                            }
                             GlassDropdownRow(
                                 title = stringResource(R.string.color_scheme),
                                 value = stringResource(
@@ -188,16 +173,17 @@ internal fun SettingsScreen(
                                 onClick = { colorMenu = true },
                                 onBounds = { colorBounds = it },
                             )
-                            if (BuildConfig.NATIVE_CAPTURE && state.nativeAvailable) {
+                            if (BuildConfig.NATIVE_CAPTURE) {
+                                // Only ZN honours this; keep the stored value while Visualizer is the fallback.
+                                val nativeMode = state.captureMode == SpectrumPreferences.MODE_NATIVE
                                 SwitchPreference(
                                     checked = state.stopWhenMuted,
                                     onCheckedChange = onStopWhenMutedChange,
                                     title = stringResource(R.string.stop_when_muted),
                                     summary = stringResource(
-                                        if (state.captureBackend == SpectrumPreferences.VISUALIZER)
-                                            R.string.stop_when_muted_unsupported else R.string.stop_when_muted_summary,
+                                        if (nativeMode) R.string.stop_when_muted_summary else R.string.stop_when_muted_unsupported,
                                     ),
-                                    enabled = optionsEnabled && state.captureBackend == SpectrumPreferences.NATIVE,
+                                    enabled = optionsEnabled && nativeMode,
                                 )
                             }
                         }
@@ -244,28 +230,6 @@ internal fun SettingsScreen(
                     )
                 }
             }
-            GlassDropdownPopup(
-                show = captureMenu && BuildConfig.NATIVE_CAPTURE,
-                onDismissRequest = { captureMenu = false },
-                anchorBounds = captureBounds,
-                anchor = captureAnchor,
-                backdrop = backdrop,
-                visuals = GlassPopupDefaults.visuals(),
-            ) {
-                listOf(
-                    SpectrumPreferences.VISUALIZER to R.string.capture_visualizer,
-                    SpectrumPreferences.NATIVE to R.string.capture_native,
-                ).forEach { (value, label) ->
-                    GlassPopupItem(
-                        text = stringResource(label),
-                        selected = state.captureBackend == value,
-                        onClick = {
-                            onCaptureBackendChange(value)
-                            captureMenu = false
-                        },
-                    )
-                }
-            }
         }
         OverlayDialog(
             show = aboutVisible,
@@ -290,9 +254,12 @@ private fun ModuleStatusCard(
     modifier: Modifier = Modifier,
 ) {
     val frameworkReady = state.connected && state.systemUiInScope && !state.loading && state.error == null
-    val ready = frameworkReady && (!BuildConfig.NATIVE_CAPTURE || state.nativeAvailable)
+    // Builds without ZN support always run Visualizer; there it is the normal mode, not a fallback.
+    val mode = if (BuildConfig.NATIVE_CAPTURE) state.captureMode else SpectrumPreferences.MODE_VISUALIZER
+    val nativeMode = mode == SpectrumPreferences.MODE_NATIVE
+    val ready = frameworkReady && (!BuildConfig.NATIVE_CAPTURE || nativeMode)
     val warning = state.loading || (state.connected && !state.systemUiInScope && state.error == null)
-            || (frameworkReady && BuildConfig.NATIVE_CAPTURE && !state.nativeAvailable)
+            || (frameworkReady && BuildConfig.NATIVE_CAPTURE && !nativeMode)
     val dark = isSystemInDarkTheme()
     val title = stringResource(
         when {
@@ -307,10 +274,14 @@ private fun ModuleStatusCard(
         state.error == SettingsError.Save -> stringResource(R.string.save_error)
         !state.connected -> stringResource(R.string.activate_hint)
         !state.systemUiInScope -> stringResource(R.string.scope_hint)
-        BuildConfig.NATIVE_CAPTURE -> stringResource(
-            if (state.nativeAvailable) R.string.native_status_connected else R.string.native_status_disconnected,
+        else -> stringResource(
+            when {
+                nativeMode -> R.string.mode_native
+                mode == null -> R.string.mode_unknown
+                BuildConfig.NATIVE_CAPTURE -> R.string.mode_visualizer_fallback
+                else -> R.string.mode_visualizer
+            },
         )
-        else -> ""
     }
     val cardColor = when {
         ready && MiuixTheme.isDynamicColor -> MiuixTheme.colorScheme.secondaryContainer

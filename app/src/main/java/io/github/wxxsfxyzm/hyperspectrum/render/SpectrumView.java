@@ -36,7 +36,7 @@ final class SpectrumView extends View {
     private final Path barMask = new Path();
     private boolean allowed, aggregatedVisible, subscribed, ownsOriginal;
     private boolean disposed, drew, fallback = true, pauseSettled;
-    private boolean signalUnavailable;
+    private boolean signalUnavailable, silenced;
     private long lastDraw, lastData, awaitingSince;
     private final int fieldSize = BuildConfig.NATIVE_CAPTURE ? AppleArtwork.SIZE : CoverColors.SIZE;
     private final int[] colors = BuildConfig.NATIVE_CAPTURE ? AppleArtwork.fallback() : CoverColors.fallback();
@@ -154,8 +154,25 @@ final class SpectrumView extends View {
         if (lifecycle != null) reconcile();
     }
 
+    /** Stop-at-volume-0: settle smoothly now and suspend the missing-data watchdog. */
+    void silenced(boolean value) {
+        if (silenced == value || disposed) return;
+        silenced = value;
+        if (value) {
+            removeCallbacks(stale);
+            if (!subscribed || !motion.isPlaying()) return;
+            if (lastDraw != 0) motion.advance(Math.max(0, SystemClock.uptimeMillis() - lastDraw));
+            lastDraw = 0; signalUnavailable = false;
+            motion.silence(); suppressOriginal(); invalidate();
+        } else {
+            // Fresh audio must arrive within the usual window once sampling resumes.
+            awaitingSince = SystemClock.uptimeMillis(); lastData = 0; scheduleStale();
+        }
+        reporter.report("spectrum_silenced value=" + value + " view=" + System.identityHashCode(this), null);
+    }
+
     void frame(float[] levels, long time, boolean available) {
-        if (disposed || !subscribed || !motion.isPlaying()) return;
+        if (disposed || !subscribed || !motion.isPlaying() || silenced) return;
         // Pending stop deliveries during a holder switch are not an audio failure.
         // A sustained failure is handled by the same 750 ms watchdog as missing FFT.
         if (!available) return;
@@ -172,7 +189,7 @@ final class SpectrumView extends View {
     }
 
     private void scheduleStale() {
-        if (subscribed && motion.isPlaying()) postDelayed(stale, 800);
+        if (subscribed && motion.isPlaying() && !silenced) postDelayed(stale, 800);
     }
 
     void suppressOriginal() {
@@ -199,7 +216,7 @@ final class SpectrumView extends View {
     }
 
     private void stale() {
-        if (disposed || !subscribed || !motion.isPlaying()) return;
+        if (disposed || !subscribed || !motion.isPlaying() || silenced) return;
         if (BuildConfig.NATIVE_CAPTURE && signalUnavailable) return;
         if (SystemClock.uptimeMillis() - Math.max(lastData, awaitingSince) >= 750) {
             if (BuildConfig.NATIVE_CAPTURE) {
@@ -288,7 +305,7 @@ final class SpectrumView extends View {
         super.onDraw(canvas);
         if (fallback || !subscribed || disposed) return;
         long now = SystemClock.uptimeMillis();
-        if (motion.isPlaying() && !signalUnavailable && now - Math.max(lastData, awaitingSince) >= 750) { stale(); return; }
+        if (motion.isPlaying() && !signalUnavailable && !silenced && now - Math.max(lastData, awaitingSince) >= 750) { stale(); return; }
         boolean colorMoving = palette(now);
         float elapsed = lastDraw == 0 ? 16 : BuildConfig.NATIVE_CAPTURE ? now - lastDraw : Math.min(64, now - lastDraw); lastDraw = now;
         boolean recovering = motion.recovering();

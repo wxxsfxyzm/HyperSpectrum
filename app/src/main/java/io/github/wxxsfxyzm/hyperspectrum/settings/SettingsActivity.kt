@@ -31,27 +31,27 @@ class SettingsActivity : ComponentActivity() {
     private val statusTimeout = Runnable {
         if (statusNonce != 0L) {
             statusNonce = 0L
-            model.nativeAvailability(false)
+            model.captureMode(null)
         }
     }
-    private val pollNativeStatus = object : Runnable {
+    private val pollCaptureMode = object : Runnable {
         override fun run() {
-            requestNativeAvailability()
+            requestCaptureMode()
             statusHandler.postDelayed(this, STATUS_POLL_MS)
         }
     }
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: Intent) {
-            if (intent.action != SpectrumPreferences.NATIVE_AVAILABILITY_ACTION) return
+            if (intent.action != SpectrumPreferences.STATUS_ACTION) return
             val senderUid = sentFromUid
             val senderPackage = sentFromPackage
             if (senderUid == Process.INVALID_UID || senderPackage != SYSTEM_UI_PACKAGE ||
                 !isUidOwner(senderUid, SYSTEM_UI_PACKAGE)) return
-            val nonce = intent.getLongExtra(SpectrumPreferences.NATIVE_AVAILABILITY_NONCE, 0L)
+            val nonce = intent.getLongExtra(SpectrumPreferences.STATUS_NONCE, 0L)
             if (nonce == 0L || nonce != statusNonce) return
             statusHandler.removeCallbacks(statusTimeout)
             statusNonce = 0L
-            model.nativeAvailability(intent.getBooleanExtra(SpectrumPreferences.NATIVE_AVAILABILITY_EXTRA, false))
+            model.captureMode(SpectrumPreferences.captureMode(intent.getStringExtra(SpectrumPreferences.CAPTURE_MODE)))
         }
     }
 
@@ -65,9 +65,8 @@ class SettingsActivity : ComponentActivity() {
                     state = model.state,
                     onEnabledChange = model::setEnabled,
                     onColorSchemeChange = model::setColorScheme,
-                    onCaptureBackendChange = model::setCaptureBackend,
                     onStopWhenMutedChange = model::setStopWhenMuted,
-                    onRefresh = { model.refresh(); requestNativeAvailability() },
+                    onRefresh = { model.refresh(); requestCaptureMode() },
                 )
             }
         }
@@ -77,15 +76,15 @@ class SettingsActivity : ComponentActivity() {
         super.onStart()
         (application as ModuleApplication).observe(serviceListener)
         if (!statusReceiverRegistered) {
-            registerReceiver(statusReceiver, android.content.IntentFilter(SpectrumPreferences.NATIVE_AVAILABILITY_ACTION), RECEIVER_EXPORTED)
+            registerReceiver(statusReceiver, android.content.IntentFilter(SpectrumPreferences.STATUS_ACTION), RECEIVER_EXPORTED)
             statusReceiverRegistered = true
         }
-        requestNativeAvailability()
-        statusHandler.postDelayed(pollNativeStatus, STATUS_POLL_MS)
+        requestCaptureMode()
+        statusHandler.postDelayed(pollCaptureMode, STATUS_POLL_MS)
     }
 
     override fun onStop() {
-        statusHandler.removeCallbacks(pollNativeStatus)
+        statusHandler.removeCallbacks(pollCaptureMode)
         statusHandler.removeCallbacks(statusTimeout)
         statusNonce = 0L
         if (statusReceiverRegistered) {
@@ -98,18 +97,18 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::model.isInitialized) { model.refresh(); requestNativeAvailability() }
+        if (::model.isInitialized) { model.refresh(); requestCaptureMode() }
     }
 
-    private fun requestNativeAvailability() {
+    private fun requestCaptureMode() {
         if (!statusReceiverRegistered || !::model.isInitialized) return
         val nonce = SystemClock.elapsedRealtimeNanos().coerceAtLeast(1L)
         statusNonce = nonce
         statusHandler.removeCallbacks(statusTimeout)
         statusHandler.postDelayed(statusTimeout, STATUS_TIMEOUT_MS)
-        val query = Intent(SpectrumPreferences.NATIVE_AVAILABILITY_QUERY_ACTION)
+        val query = Intent(SpectrumPreferences.STATUS_QUERY_ACTION)
             .setPackage(SYSTEM_UI_PACKAGE)
-            .putExtra(SpectrumPreferences.NATIVE_AVAILABILITY_NONCE, nonce)
+            .putExtra(SpectrumPreferences.STATUS_NONCE, nonce)
             .putExtra("sender_uid", Process.myUid())
         val options = BroadcastOptions.makeBasic().setShareIdentityEnabled(true).toBundle()
         sendBroadcast(query, null, options)

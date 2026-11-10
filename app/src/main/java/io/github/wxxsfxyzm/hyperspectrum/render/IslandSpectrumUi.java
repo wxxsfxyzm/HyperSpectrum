@@ -49,7 +49,7 @@ public final class IslandSpectrumUi {
     private final ArtworkPalette palette;
     private volatile boolean closed;
     private volatile Object[][] reloadState;
-    private boolean playing, interactive = true;
+    private boolean playing, interactive = true, silenced;
     private boolean enabled = SpectrumPreferences.DEFAULT_ENABLED;
     private String key;
     private String route = "";
@@ -65,8 +65,15 @@ public final class IslandSpectrumUi {
 
     public IslandSpectrumUi(CaptureProbe.Reporter reporter) {
         this.reporter = reporter;
-        SpectrumCapture.Sink sink = (levels, time, healthy) -> {
-            if (!closed) for (SpectrumView view : new ArrayList<>(active)) view.frame(levels, time, healthy);
+        SpectrumCapture.Sink sink = new SpectrumCapture.Sink() {
+            @Override public void frame(float[] levels, long time, boolean healthy) {
+                if (!closed) for (SpectrumView view : new ArrayList<>(active)) view.frame(levels, time, healthy);
+            }
+            @Override public void silenced(boolean value) {
+                if (closed || silenced == value) return;
+                silenced = value;
+                for (Slot slot : slots.values()) slot.view.silenced(value);
+            }
         };
         engine = SpectrumCapture.create(reporter, main, sink);
         reporter.report("spectrum_backend type=" + (BuildConfig.NATIVE_CAPTURE ? "native" : "visualizer"), null);
@@ -103,11 +110,7 @@ public final class IslandSpectrumUi {
 
     public void stopWhenMuted(boolean value) { engine.stopWhenMuted(value); }
 
-    public void captureBackend(String value) {
-        engine.captureBackend(SpectrumPreferences.NATIVE.equals(value));
-    }
-
-    public boolean nativeAvailable() { return engine.nativeAvailable(); }
+    public String captureMode() { return engine.captureMode(); }
 
     public void media(Context ctx, String notificationKey, Boolean isPlaying, String route,
                String packageName, int userId, String track, Icon artwork) {
@@ -176,6 +179,7 @@ public final class IslandSpectrumUi {
                 slots.put(holder, slot);
                 view.colors(coverColors, originalColors);
                 view.playing(MediaIcon.playing(pic, route, playing));
+                view.silenced(silenced);
                 container.addView(view, new FrameLayout.LayoutParams((FrameLayout.LayoutParams) original.getLayoutParams()));
                 reporter.report("spectrum_view_install holder=" + System.identityHashCode(holder)
                         + " slots=" + slots.size() + " source=" + (wiredIcon ? "wired_device" : "waveform"), null);
