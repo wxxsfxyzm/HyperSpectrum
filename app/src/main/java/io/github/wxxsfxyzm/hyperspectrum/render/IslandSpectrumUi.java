@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Main-looper owner of every replacement View and subscription. */
@@ -250,7 +251,10 @@ public final class IslandSpectrumUi {
         if (reloadState != null) return reloadState;
         AtomicReference<Object[][]> snapshot = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);
+        // 0 pending, 1 running, 2 cancelled: a rejected reload must leave this generation intact.
+        AtomicInteger phase = new AtomicInteger();
         Runnable cleanup = () -> {
+            if (!phase.compareAndSet(0, 1)) return;
             try {
                 Object[][] state = new Object[slots.size()][2]; int index = 0;
                 for (Slot slot : slots.values()) state[index++] = new Object[]{slot.holder, slot.shown};
@@ -272,8 +276,17 @@ public final class IslandSpectrumUi {
         if (Looper.myLooper() == Looper.getMainLooper()) cleanup.run();
         else {
             main.post(cleanup);
-            try { if (!done.await(2, TimeUnit.SECONDS)) return null; }
-            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return null; }
+            try {
+                if (!done.await(2, TimeUnit.SECONDS)) {
+                    if (phase.compareAndSet(0, 2)) { main.removeCallbacks(cleanup); return null; }
+                    // Already running: engine retirement is bounded, so wait for a consistent result.
+                    if (!done.await(5, TimeUnit.SECONDS)) return null;
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                if (phase.compareAndSet(0, 2)) main.removeCallbacks(cleanup);
+                return null;
+            }
         }
         return snapshot.get();
     }

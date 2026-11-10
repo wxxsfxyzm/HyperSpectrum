@@ -6,7 +6,6 @@
     <string name="status_connected">Framework connected</string>
     <string name="status_working">working</string>
     <string name="status_disconnected">Framework not connected</string>
-    <string name="status_ready">Settings apply immediately.</string>
     <string name="activate_hint">Enable Miui Island Spectrum in LSPosed and select SystemUI. Restart the target process after first activation.</string>
     <string name="scope_hint">Select SystemUI in the module scope in LSPosed.</string>
     <string name="loading">Loading settings…</string>
@@ -23,8 +22,6 @@
     <string name="capture_native">Native (Zygisk Next)</string>
     <string name="native_status_connected">ZN sampling is available</string>
     <string name="native_status_disconnected">ZN sampling is not connected</string>
-    <string name="status_working_zn_connected">Working · ZN connected</string>
-    <string name="status_working_zn_disconnected">Working · ZN disconnected</string>
     <string name="stop_when_muted">Stop at volume 0</string>
     <string name="stop_when_muted_summary">Stop sampling when media volume is zero.</string>
     <string name="stop_when_muted_unsupported">Unsupported by the Visualizer source.</string>

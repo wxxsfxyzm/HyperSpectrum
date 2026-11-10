@@ -378,7 +378,12 @@ public final class SpectrumModule extends XposedModule {
         }
         // Do not hold the module lock while waiting for main-looper View cleanup.
         Object[][] holders = oldUi == null ? new Object[0][] : oldUi.prepareReload();
-        if (holders == null) { report("hot_reload_deferred reason=main_cleanup", null); return false; }
+        if (holders == null) {
+            // Rejecting keeps this generation running: undo the early retirement.
+            synchronized (this) { retired = false; ensureProbe(); }
+            report("hot_reload_deferred reason=main_cleanup", null);
+            return false;
+        }
         synchronized (this) {
         ui = null;
         // Only host/framework objects cross generations. No old module runtime/listener/buffer.

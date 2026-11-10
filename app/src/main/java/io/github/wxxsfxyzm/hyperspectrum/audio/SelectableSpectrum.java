@@ -5,12 +5,10 @@ package io.github.wxxsfxyzm.hyperspectrum.audio;
 import io.github.wxxsfxyzm.hyperspectrum.config.SpectrumPreferences;
 
 import android.os.Handler;
-import android.os.SystemClock;
 
 /** Keeps the ZN handshake observable while Visualizer remains the default source. */
 final class SelectableSpectrum implements SpectrumCapture {
     private final CaptureProbe.Reporter reporter;
-    private final Sink sink;
     private final LiveSpectrum visualizer;
     private final NativeSpectrum nativeSpectrum;
     private volatile boolean nativeAvailable;
@@ -21,7 +19,6 @@ final class SelectableSpectrum implements SpectrumCapture {
 
     SelectableSpectrum(CaptureProbe.Reporter reporter, Handler main, Sink sink) {
         this.reporter = reporter;
-        this.sink = sink;
         visualizer = new LiveSpectrum(reporter, main, (levels, time, healthy) -> {
             if (!nativeSelected) sink.frame(levels, time, healthy);
         });
@@ -44,8 +41,9 @@ final class SelectableSpectrum implements SpectrumCapture {
         if (nativeAvailable == value) return;
         nativeAvailable = value;
         reporter.report("native_backend_available=" + value, null);
+        // Runs on the native I/O thread: never touch the main-looper sink here.
+        // Views fall back through their own stale watchdog once frames stop.
         if (initialized) applyDemand();
-        if (nativeSelected && !value) sink.frame(new float[6], SystemClock.uptimeMillis(), false);
     }
 
     private void applyDemand() {
@@ -57,9 +55,8 @@ final class SelectableSpectrum implements SpectrumCapture {
                 + " available=" + nativeAvailable + " active=" + useNative, null);
     }
 
-    @Override public void execute(Runnable action) {
-        (nativeSelected ? nativeSpectrum : visualizer).execute(action);
-    }
+    // One fixed worker keeps artwork decoding single-threaded across backend switches.
+    @Override public void execute(Runnable action) { visualizer.execute(action); }
     @Override public void audio(android.content.Context context) {
         visualizer.audio(context); nativeSpectrum.audio(context);
     }
@@ -76,7 +73,6 @@ final class SelectableSpectrum implements SpectrumCapture {
         nativeSelected = value;
         applyDemand();
         if (value && !nativeAvailable) {
-            sink.frame(new float[6], SystemClock.uptimeMillis(), false);
             reporter.report("spectrum_backend_waiting reason=zygisk_next_unavailable", null);
         }
     }
@@ -86,6 +82,5 @@ final class SelectableSpectrum implements SpectrumCapture {
         available(false);
         nativeSpectrum.close();
         visualizer.close();
-        sink.frame(new float[6], SystemClock.uptimeMillis(), false);
     }
 }

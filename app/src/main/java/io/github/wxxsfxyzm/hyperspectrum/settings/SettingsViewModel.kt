@@ -86,7 +86,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         availabilityPreferences.unregisterOnSharedPreferenceChangeListener(availabilityListener)
         detachPreferences()
-        super.onCleared()
     }
 
     private fun detachPreferences() {

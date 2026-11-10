@@ -159,11 +159,17 @@ final class LiveSpectrum implements SpectrumCapture {
                 if (closed) return;
                 subscribers = count;
                 demanded = enabled;
-                if (!enabled) { stop("no_visible_playback"); return; }
+                if (!enabled) {
+                    stop("no_visible_playback");
+                    retryAfter = 0; // An ordinary stop is not a failure; resume immediately.
+                    return;
+                }
                 if (visualizer == null) {
-                    volume(SystemClock.uptimeMillis(), true);
+                    long now = SystemClock.uptimeMillis();
+                    volume(now, true);
                     source();
-                    if (source.sessionId() >= 0) start(false);
+                    // Honour the failure cooldown; pollOutput retries once it expires.
+                    if (source.sessionId() >= 0 && now >= retryAfter) start(false);
                 }
                 worker.removeCallbacks(outputPoll);
                 worker.postDelayed(outputPoll, 200);
