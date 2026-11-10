@@ -34,12 +34,15 @@ audio may also affect the spectrum.
 Use a full Git checkout, Android SDK 37, and JDK 25 for the Gradle daemon.
 Set `ANDROID_HOME` or specify `sdk.dir` in a local, untracked `local.properties`.
 
-Place a local [miuix](https://github.com/compose-miuix-ui/miuix) checkout in
-`../miuix`, next to this project. The settings UI uses its Glass components
-(0.9.4 development sources) through a Gradle composite build. No published miuix
-artifacts are used. Both builds must use the same AGP version; this project
-currently matches the local checkout's AGP 9.4.1. The local miuix build also
-requires a JDK 21 toolchain, which Gradle can provision.
+The settings UI uses [miuix](https://github.com/compose-miuix-ui/miuix) Glass
+components (0.9.4 development snapshot) published on GitHub Packages, which
+requires authentication. Set `gpr.user` and `gpr.key` (a token with
+`read:packages`) in `~/.gradle/gradle.properties`, or set `GITHUB_ACTOR` and
+`GITHUB_TOKEN`.
+
+To build against a local miuix checkout instead, place it in `../miuix` and
+uncomment the composite build in `settings.gradle.kts`. Both builds must use
+the same AGP version (currently 9.5.1).
 
 For a signed APK, copy `keystore.properties.example` to `keystore.properties`
 and configure your own signing key locally. Keep signing keys and credentials

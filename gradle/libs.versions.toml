@@ -2,17 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [versions]
-# Match the sibling miuix composite without editing that checkout.
 agp = "9.5.1"
 libxposed = "102.0.0"
 junit = "4.13.2"
-kotlin = "2.4.10"
+kotlin = "2.4.21"
 activity = "1.13.0"
 lifecycle = "2.11.0"
-compose = "1.12.0"
+compose = "1.12.2"
 coroutines = "1.11.0"
-# These coordinates are always substituted by the required ../miuix build.
-miuix = "local"
+# Keep the remote version when enabling the local composite build.
+miuix = "0.9.4-45645854-SNAPSHOT"
 material-icons = "1.7.8"
 
 [libraries]
