@@ -31,6 +31,7 @@ private data class LoadedSettings(
     val enabled: Boolean,
     val colorScheme: String,
     val stopWhenMuted: Boolean,
+    val compatibilityMode: Boolean,
 )
 
 data class SettingsState(
@@ -39,6 +40,7 @@ data class SettingsState(
     val enabled: Boolean = SpectrumPreferences.DEFAULT_ENABLED,
     val colorScheme: String = SpectrumPreferences.DEFAULT_COLOR_SCHEME,
     val stopWhenMuted: Boolean = SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED,
+    val compatibilityMode: Boolean = SpectrumPreferences.DEFAULT_COMPATIBILITY_MODE,
     /** SpectrumPreferences.MODE_*, or null while SystemUI has not reported one. */
     val captureMode: String? = null,
     val framework: String = "",
@@ -114,6 +116,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         prefs.getBoolean(SpectrumPreferences.ENABLED, SpectrumPreferences.DEFAULT_ENABLED),
                         SpectrumPreferences.colorScheme(prefs.getString(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.DEFAULT_COLOR_SCHEME)),
                         prefs.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED),
+                        prefs.getBoolean(SpectrumPreferences.COMPATIBILITY_MODE, SpectrumPreferences.DEFAULT_COMPATIBILITY_MODE),
                     )
                 }
                 if (service !== current) return@launch
@@ -121,11 +124,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 confirmedEnabled = loaded.enabled
                 confirmedOptions[SpectrumPreferences.COLOR_SCHEME] = loaded.colorScheme
                 confirmedOptions[SpectrumPreferences.STOP_WHEN_MUTED] = loaded.stopWhenMuted
+                confirmedOptions[SpectrumPreferences.COMPATIBILITY_MODE] = loaded.compatibilityMode
                 state = SettingsState(
                     connected = true,
                     enabled = loaded.enabled,
                     colorScheme = loaded.colorScheme,
                     stopWhenMuted = loaded.stopWhenMuted,
+                    compatibilityMode = loaded.compatibilityMode,
                     captureMode = state.captureMode,
                     framework = loaded.framework,
                     systemUiInScope = loaded.systemUiInScope,
@@ -171,6 +176,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setColorScheme(value: String) = setOption(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.colorScheme(value))
     fun setStopWhenMuted(value: Boolean) = setOption(SpectrumPreferences.STOP_WHEN_MUTED, value)
+    fun setCompatibilityMode(value: Boolean) = setOption(SpectrumPreferences.COMPATIBILITY_MODE, value)
     fun captureMode(value: String?) {
         state = state.copy(captureMode = value)
         // Remember the live answer so the next launch shows it immediately.
@@ -212,6 +218,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private fun withOption(previous: SettingsState, key: String, value: Any): SettingsState = when (key) {
         SpectrumPreferences.COLOR_SCHEME -> previous.copy(colorScheme = value as String)
+        SpectrumPreferences.COMPATIBILITY_MODE -> previous.copy(compatibilityMode = value as Boolean)
         else -> previous.copy(stopWhenMuted = value as Boolean)
     }
 

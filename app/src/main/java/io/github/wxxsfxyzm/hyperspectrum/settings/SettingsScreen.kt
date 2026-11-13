@@ -82,6 +82,7 @@ internal fun SettingsScreen(
     onEnabledChange: (Boolean) -> Unit,
     onColorSchemeChange: (String) -> Unit,
     onStopWhenMutedChange: (Boolean) -> Unit,
+    onCompatibilityModeChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -186,6 +187,13 @@ internal fun SettingsScreen(
                                     enabled = optionsEnabled && nativeMode,
                                 )
                             }
+                            SwitchPreference(
+                                checked = state.compatibilityMode,
+                                onCheckedChange = onCompatibilityModeChange,
+                                title = stringResource(R.string.compatibility_mode),
+                                summary = stringResource(R.string.compatibility_mode_summary),
+                                enabled = optionsEnabled,
+                            )
                         }
                     }
                     item(key = "about-title") {

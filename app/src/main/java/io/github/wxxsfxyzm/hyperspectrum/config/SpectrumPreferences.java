@@ -15,6 +15,9 @@ public final class SpectrumPreferences {
     public static final String DEFAULT_COLOR_SCHEME = ORIGINAL;
     public static final String STOP_WHEN_MUTED = "stop_when_muted";
     public static final boolean DEFAULT_STOP_WHEN_MUTED = true;
+    // Layout search for media islands that other modules redraw without the host holders.
+    public static final String COMPATIBILITY_MODE = "compatibility_mode";
+    public static final boolean DEFAULT_COMPATIBILITY_MODE = false;
     // ZN is preferred; Visualizer only runs as a fallback. Pref key and extra share this name.
     public static final String CAPTURE_MODE = "capture_mode";
     public static final String MODE_NATIVE = "native";

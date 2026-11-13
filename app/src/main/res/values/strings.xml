@@ -1,12 +1,12 @@
 <resources>
     <string name="module_description">Real audio spectrum for Xiaomi music island</string>
     <string name="app_name" translatable="false">HyperSpectrum</string>
-    <string name="module_name" translatable="false">Miui Island Spectrum</string>
+    <string name="module_name" translatable="false">HyperOS Island Spectrum</string>
     <string name="settings_title">Settings</string>
     <string name="status_connected">Framework connected</string>
     <string name="status_working">working</string>
     <string name="status_disconnected">Framework not connected</string>
-    <string name="activate_hint">Enable Miui Island Spectrum in LSPosed and select SystemUI. Restart the target process after first activation.</string>
+    <string name="activate_hint">Enable HyperOS Island Spectrum in LSPosed and select SystemUI. Restart the target process after first activation.</string>
     <string name="scope_hint">Select SystemUI in the module scope in LSPosed.</string>
     <string name="loading">Loading settings…</string>
     <string name="load_error">Could not load settings. Refresh to try again.</string>
@@ -24,6 +24,8 @@
     <string name="stop_when_muted">Stop at volume 0</string>
     <string name="stop_when_muted_summary">Stop sampling when media volume is zero.</string>
     <string name="stop_when_muted_unsupported">Only available in ZN sampling mode.</string>
+    <string name="compatibility_mode">Compatibility mode</string>
+    <string name="compatibility_mode_summary">Compatible with some modules that modify the media island.</string>
     <string name="enable_spectrum">Audio spectrum</string>
     <string name="enable_spectrum_summary">Show six colored bars following the music. Turn off to restore the official Lottie animation.</string>
     <string name="about_title">About</string>

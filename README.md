@@ -24,7 +24,7 @@ audio may also affect the spectrum.
 ## Installation
 
 1. Install the module APK.
-2. Enable **Miui Island Spectrum** in LSPosed and select only **SystemUI**
+2. Enable **HyperOS Island Spectrum** in LSPosed and select only **SystemUI**
    (`com.android.systemui`).
 3. Restart the device for initial activation.
 4. Open **HyperSpectrum** from the module settings in LSPosed.

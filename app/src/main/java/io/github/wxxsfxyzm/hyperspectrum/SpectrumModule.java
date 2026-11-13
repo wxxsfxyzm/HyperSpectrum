@@ -73,7 +73,8 @@ public final class SpectrumModule extends XposedModule {
     private boolean enabled = SpectrumPreferences.DEFAULT_ENABLED;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener = (prefs, key) -> {
         if (key == null || SpectrumPreferences.ENABLED.equals(key)
-                || SpectrumPreferences.COLOR_SCHEME.equals(key) || SpectrumPreferences.STOP_WHEN_MUTED.equals(key))
+                || SpectrumPreferences.COLOR_SCHEME.equals(key) || SpectrumPreferences.STOP_WHEN_MUTED.equals(key)
+                || SpectrumPreferences.COMPATIBILITY_MODE.equals(key))
             readPreferences();
     };
 
@@ -83,13 +84,16 @@ public final class SpectrumModule extends XposedModule {
             enabled = preferences.getBoolean(SpectrumPreferences.ENABLED, SpectrumPreferences.DEFAULT_ENABLED);
             String scheme = SpectrumPreferences.colorScheme(preferences.getString(SpectrumPreferences.COLOR_SCHEME, SpectrumPreferences.DEFAULT_COLOR_SCHEME));
             boolean stopWhenMuted = preferences.getBoolean(SpectrumPreferences.STOP_WHEN_MUTED, SpectrumPreferences.DEFAULT_STOP_WHEN_MUTED);
+            boolean compatibility = preferences.getBoolean(SpectrumPreferences.COMPATIBILITY_MODE,
+                    SpectrumPreferences.DEFAULT_COMPATIBILITY_MODE);
             if (ui != null) {
                 ui.enabled(enabled);
                 ui.colorScheme(scheme);
                 ui.stopWhenMuted(stopWhenMuted);
+                ui.compatibilityMode(compatibility);
             }
             report("spectrum_setting enabled=" + enabled + " colorScheme=" + scheme + " stopWhenMuted="
-                    + stopWhenMuted, null);
+                    + stopWhenMuted + " compatibilityMode=" + compatibility, null);
         } catch (RuntimeException failure) {
             report("spectrum_settings_unavailable", failure);
         }
@@ -348,7 +352,10 @@ public final class SpectrumModule extends XposedModule {
             int userId = ((Number) field(media, "userId")).intValue();
             String track = packageName + "|" + userId + "|"
                     + key + "|" + field(media, "mediaId") + "|" + field(media, "song") + "|" + field(media, "artist");
-            ui.media(context, key, playing, route, packageName, userId, track, artwork);
+            Object app; // Display label; only the layout fallback uses it to find the media island.
+            try { app = field(media, "app"); } catch (NoSuchFieldException missing) { app = null; }
+            ui.media(context, key, playing, route, packageName, userId, track, artwork,
+                    app == null ? null : app.toString());
         }
     }
 

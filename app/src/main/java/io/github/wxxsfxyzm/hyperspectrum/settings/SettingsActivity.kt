@@ -66,6 +66,7 @@ class SettingsActivity : ComponentActivity() {
                     onEnabledChange = model::setEnabled,
                     onColorSchemeChange = model::setColorScheme,
                     onStopWhenMutedChange = model::setStopWhenMuted,
+                    onCompatibilityModeChange = model::setCompatibilityMode,
                     onRefresh = { model.refresh(); requestCaptureMode() },
                 )
             }

@@ -66,7 +66,7 @@ android {
         minSdk = 36
         targetSdk = 37
         versionCode = gitVersionCode.get()
-        versionName = "0.1"
+        versionName = "0.2"
         buildConfigField("String", "PROBE_BUILD", "\"${probeBuild.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("boolean", "DIAGNOSTIC_MODE", providers.gradleProperty("diagnosticProbe").orElse("false").get())
         buildConfigField("boolean", "ROUTE_COMPENSATION", providers.gradleProperty("routeCompensation").orElse("true").get())
